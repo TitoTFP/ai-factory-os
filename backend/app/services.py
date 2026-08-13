@@ -4,11 +4,9 @@ import asyncio
 import ipaddress
 import json
 import re
-import socket
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
 import httpx
 from cryptography.fernet import InvalidToken
@@ -17,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal
+from .network import safe_http_transport, validate_external_url
 from .models import (
     Agent,
     Artifact,
@@ -277,23 +276,6 @@ def write_workspace_artifact(factory_id: str, name: str, content: str) -> str:
     return str(path.relative_to(WORKSPACE_ROOT / factory_id))
 
 
-def validate_external_url(url: str) -> None:
-    parsed = urlsplit(url)
-    if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password or not parsed.hostname:
-        raise ValueError("absolute public http(s) URL is required")
-    hostname = parsed.hostname.rstrip(".").casefold()
-    if hostname in {"localhost", "localhost.localdomain", "metadata.google.internal"} or hostname.endswith(".local"):
-        raise ValueError("private or local network URLs are not allowed")
-    try:
-        addresses = {item[4][0] for item in socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)}
-    except socket.gaierror as exc:
-        raise ValueError("URL host could not be resolved") from exc
-    for address in addresses:
-        ip = ipaddress.ip_address(address)
-        if any((ip.is_private, ip.is_loopback, ip.is_link_local, ip.is_reserved, ip.is_multicast, ip.is_unspecified)):
-            raise ValueError("private or local network URLs are not allowed")
-
-
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):
         secret_keys = {"api_key", "authorization", "token", "password", "secret", "cookie", "headers", "body"}
@@ -377,8 +359,8 @@ async def execute_tool(
         if method not in tool.permissions:
             raise PermissionError(f"HTTP method is not allowed for {tool_name}: {method}")
         url = str(arguments.get("url", ""))
-        validate_external_url(url)
-        async with httpx.AsyncClient(timeout=20, follow_redirects=False, trust_env=False) as client:
+        transport = safe_http_transport(url)
+        async with httpx.AsyncClient(timeout=20, follow_redirects=False, trust_env=False, transport=transport) as client:
             response = await client.request(method, url, json=arguments.get("body"))
         result = {"status_code": response.status_code, "url": str(response.url), "body": response.text[:200_000]}
     else:
@@ -445,6 +427,19 @@ class Runtime:
             await self._task
             self._task = None
 
+    async def _record_runtime_error(self, factory_id: str, exc: Exception) -> None:
+        db = SessionLocal()
+        try:
+            runs = list(db.scalars(select(FactoryRun).where(FactoryRun.factory_id == factory_id, FactoryRun.status == "running")))
+            message = str(exc)[:2000]
+            for run in runs:
+                run.last_error = message
+                record_event(db, factory_id, "runtime_error", {"run_id": run.id, "error": message})
+            if runs:
+                db.commit()
+        finally:
+            db.close()
+
     async def _run(self) -> None:
         while not self._stop.is_set():
             try:
@@ -454,8 +449,13 @@ class Runtime:
                 finally:
                     db.close()
                 for factory_id in factory_ids:
-                    await self.process_factory(factory_id)
-            except (OSError, RuntimeError, ProviderError):
+                    try:
+                        await self.process_factory(factory_id)
+                    except Exception as exc:
+                        await self._record_runtime_error(factory_id, exc)
+            except Exception:
+                # A database discovery failure must not kill the daemon; the next
+                # poll retries it. Per-factory failures are persisted above.
                 pass
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=settings.runtime_poll_seconds)

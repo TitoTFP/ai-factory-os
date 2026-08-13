@@ -9,7 +9,8 @@ from urllib.parse import quote
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import models
@@ -44,7 +45,8 @@ from .schemas import (
 )
 from .oauth import OAuthError, verify_oauth_code
 from .security import create_token, decode_token, encrypt_secret, hash_password, new_oauth_state, utc_now, verify_password
-from .services import architect_factory, credential_for, record_event, runtime, validate_external_url
+from .network import validate_external_url
+from .services import architect_factory, credential_for, record_event, runtime
 
 
 @asynccontextmanager
@@ -392,8 +394,17 @@ def create_message(factory_id: str, payload: MessageCreate, db: Session = Depend
         if existing:
             return MessageResponse.model_validate(existing)
     message = Message(factory_id=factory.id, sender_agent_id=payload.sender_agent_id, recipient_agent_id=payload.recipient_agent_id, message_type=payload.message_type, subject=payload.subject, body=payload.body, payload=payload.payload, correlation_id=payload.correlation_id, idempotency_key=payload.idempotency_key, status="delivered" if payload.recipient_agent_id else "queued", delivered_at=now() if payload.recipient_agent_id else None)
-    db.add(message)
-    db.flush()
+    try:
+        # The unique constraint is the authority under concurrent requests;
+        # the pre-read above is only the fast path.
+        with db.begin_nested():
+            db.add(message)
+            db.flush()
+    except IntegrityError:
+        existing = db.scalar(select(Message).where(Message.factory_id == factory.id, Message.idempotency_key == payload.idempotency_key)) if payload.idempotency_key else None
+        if existing:
+            return MessageResponse.model_validate(existing)
+        raise HTTPException(status_code=409, detail="message idempotency key already exists")
     record_event(db, factory.id, "message_published", {"message_id": message.id, "type": message.message_type}, actor_type="user", actor_id=user.id)
     db.commit()
     db.refresh(message)
@@ -447,19 +458,24 @@ async def event_stream(websocket: WebSocket, factory_id: str) -> None:
         await websocket.close(code=4403)
         return
     await websocket.accept()
-    sent_event_ids: set[str] = set()
+    last_created_at = None
+    last_event_id = ""
     try:
         while True:
             db = SessionLocal()
             try:
-                events = list(db.scalars(select(Event).where(Event.factory_id == factory_id).order_by(Event.created_at.asc()).limit(100)))
+                if last_created_at is None:
+                    events = list(db.scalars(select(Event).where(Event.factory_id == factory_id).order_by(Event.created_at.desc(), Event.id.desc()).limit(100)))
+                    events.reverse()
+                else:
+                    events = list(db.scalars(select(Event).where(
+                        Event.factory_id == factory_id,
+                        or_(Event.created_at > last_created_at, and_(Event.created_at == last_created_at, Event.id > last_event_id)),
+                    ).order_by(Event.created_at.asc(), Event.id.asc()).limit(100)))
                 for event in events:
-                    if event.id in sent_event_ids:
-                        continue
                     await websocket.send_json(EventResponse.model_validate(event).model_dump(mode="json"))
-                    sent_event_ids.add(event.id)
-                if len(sent_event_ids) > 500:
-                    sent_event_ids = set(event.id for event in events)
+                    last_created_at = event.created_at
+                    last_event_id = event.id
             finally:
                 db.close()
             await asyncio.sleep(2)
