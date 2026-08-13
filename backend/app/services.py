@@ -573,7 +573,7 @@ class Runtime:
         tools.extend([
             {"type": "function", "function": {"name": "delegate_task", "description": "Delegate a task to another agent.", "parameters": {"type": "object", "properties": {"agent_id": {"type": "string"}, "title": {"type": "string"}, "description": {"type": "string"}, "goal_id": {"type": "string"}, "inputs": {"type": "object"}}, "required": ["agent_id", "title", "description"]}}},
             {"type": "function", "function": {"name": "request_review", "description": "Ask another agent to review an artifact.", "parameters": {"type": "object", "properties": {"agent_id": {"type": "string"}, "artifact_id": {"type": "string"}, "task_id": {"type": "string"}, "instructions": {"type": "string"}}, "required": ["agent_id", "artifact_id"]}}},
-            {"type": "function", "function": {"name": "reorganize", "description": "Apply a durable organization change when workload requires it.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["hire", "hibernate", "merge", "move"]}, "agent_id": {"type": "string"}, "target_agent_id": {"type": "string"}, "space_id": {"type": "string"}}, "required": ["action"]}}},
+            {"type": "function", "function": {"name": "reorganize", "description": "Apply a durable organization change when workload requires it.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["hire", "hibernate", "merge", "move", "move_responsibility"]}, "agent_id": {"type": "string"}, "target_agent_id": {"type": "string"}, "space_id": {"type": "string"}}, "required": ["action"]}}},
         ])
         return tools
 

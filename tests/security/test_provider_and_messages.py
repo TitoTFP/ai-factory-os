@@ -7,7 +7,7 @@ import httpx
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Event, Factory, Message
+from app.models import Agent, Event, Factory, FactoryRun, Message, Space, Task, Tool
 from app.provider import FakeProvider, OpenAICompatibleProvider, ProviderConfig, ProviderResponse
 from app.services import Runtime
 
@@ -46,9 +46,40 @@ def test_openai_compatible_adapter_parses_tool_calls_and_usage():
     asyncio.run(scenario())
 
 
+def test_model_tool_schema_exposes_move_responsibility_and_provider_call(database):
+    db = SessionLocal()
+    try:
+        factory = Factory(owner_id="owner", name="Org", mission="m", primary_objective="o", constraints=[])
+        db.add(factory)
+        db.flush()
+        space = Space(factory_id=factory.id, name="Work", purpose="p")
+        db.add(space)
+        db.flush()
+        agent = Agent(factory_id=factory.id, space_id=space.id, name="A", role="r", objective="o", responsibilities=["research"])
+        target = Agent(factory_id=factory.id, space_id=space.id, name="B", role="r", objective="o")
+        task = Task(factory_id=factory.id, assignee_id=agent.id, title="organize")
+        db.add_all([agent, target, task, FactoryRun(factory_id=factory.id, status="running"), Tool(factory_id=factory.id, name="workspace", enabled=True, permissions=["read"])])
+        db.commit()
+        schema = Runtime._agent_tools(db, factory.id)
+        reorganize = next(item for item in schema if item["function"]["name"] == "reorganize")
+        assert "move_responsibility" in reorganize["function"]["parameters"]["properties"]["action"]["enum"]
+        result = asyncio.run(Runtime()._model_action(db, factory, agent, task, "reorganize", {"action": "move_responsibility", "agent_id": agent.id, "target_agent_id": target.id}))
+        assert result["action"] == "move_responsibility"
+    finally:
+        db.close()
+
+
 def test_message_idempotency_and_delivery(client, auth):
-    factory = client.post("/api/factories", headers=auth, json={"name": "Messages", "mission": "m", "primary_objective": "o", "provider_api_key": "secret"}).json()
+    factory = client.post("/api/factories", headers=auth, json={"name": "Messages", "mission": "m", "primary_objective": "o", "provider_api_key": "secret", "tool_permissions": ["workspace", "http"]}).json()
     factory_id = factory["id"]
+    db = SessionLocal()
+    try:
+        event = db.scalar(select(Event).where(Event.factory_id == factory_id, Event.event_type == "factory_created"))
+        assert event is not None
+        assert event.payload["permissions"] == ["http", "workspace"]
+        assert event.payload["model"]
+    finally:
+        db.close()
     payload = {"message_type": "TASK_REQUEST", "body": "do it", "idempotency_key": "same-key", "correlation_id": "corr-1"}
     first = client.post(f"/api/factories/{factory_id}/messages", headers=auth, json=payload)
     second = client.post(f"/api/factories/{factory_id}/messages", headers=auth, json=payload)

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.models import Agent, Artifact, Event, Factory, FactoryRun, Goal, Message, Space, Task, Tool
 from app.services import Runtime, execute_tool
+from app.provider import ProviderResponse, ToolCall
 from app.security import utc_now
 
 
@@ -158,6 +159,40 @@ def test_agent_delegation_and_review_round_trip(database):
         asyncio.run(runtime._process_inbox(db, factory))
         review = db.scalar(select(Task).where(Task.assignee_id == recipient.id, Task.inputs["review_artifact_id"].as_string() == artifact.id))
         assert review is not None
+    finally:
+        db.close()
+
+
+def test_provider_issued_reorganization_call_is_applied(database, monkeypatch):
+    db = SessionLocal()
+    try:
+        factory = Factory(owner_id="owner", name="Provider Org", mission="m", primary_objective="o", constraints=[])
+        db.add(factory)
+        db.flush()
+        space = Space(factory_id=factory.id, name="Work", purpose="p")
+        db.add(space)
+        db.flush()
+        source = Agent(factory_id=factory.id, space_id=space.id, name="Source", role="r", objective="o", responsibilities=["research"])
+        target = Agent(factory_id=factory.id, space_id=space.id, name="Target", role="r", objective="o")
+        task = Task(factory_id=factory.id, assignee_id=source.id, title="Reorganize", description="Move responsibility")
+        db.add_all([source, target, task, FactoryRun(factory_id=factory.id, status="running")])
+        db.commit()
+
+        class ToolCallingProvider:
+            config = type("Config", (), {"model": "test-model"})()
+            last_response = ProviderResponse("", total_tokens=1, tool_calls=(ToolCall("call-1", "reorganize", {"action": "move_responsibility", "agent_id": source.id, "target_agent_id": target.id}),))
+
+            async def chat(self, messages, *, json_mode=False, tools=None):
+                return "reorganized"
+
+        monkeypatch.setattr("app.services.provider_for", lambda _db, _factory_id: ToolCallingProvider())
+        asyncio.run(Runtime().process_factory(factory.id))
+        db.expire_all()
+        persisted_target = db.get(Agent, target.id)
+        persisted_task = db.get(Task, task.id)
+        assert persisted_target is not None and "research" in persisted_target.responsibilities
+        assert persisted_task is not None and persisted_task.status == "done"
+        assert db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "organization_changed")) is not None
     finally:
         db.close()
 

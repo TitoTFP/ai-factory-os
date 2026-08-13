@@ -126,6 +126,9 @@ def test_foreign_tenant_cannot_mutate_any_factory_resource(client, database):
     assert client.post(f"/api/factories/{first_factory}/tasks", headers=second_headers, json={"title": "foreign"}).status_code == 404
     assert client.post(f"/api/factories/{first_factory}/messages", headers=second_headers, json={"message_type": "MESSAGE", "body": "foreign"}).status_code == 404
     assert client.post(f"/api/factories/{first_factory}/goals/{ids['goal']}/complete", headers=second_headers).status_code == 404
+    assert client.post(f"/api/factories/{first_factory}/architect", headers=second_headers).status_code == 404
+    assert client.post(f"/api/factories/{first_factory}/resume", headers=second_headers).status_code == 404
+    assert client.post(f"/api/factories/{first_factory}/organization", headers=second_headers, json={"action": "hire"}).status_code == 404
 
     db = SessionLocal()
     try:

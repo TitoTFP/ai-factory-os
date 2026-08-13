@@ -238,17 +238,25 @@ def create_factory(payload: FactoryCreate, db: Session = Depends(get_db), user: 
         encrypted_api_key = encrypt_secret(payload.provider_api_key.get_secret_value())
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    provider_model = payload.provider_model or settings.provider_model
     db.add(
         FactoryCredential(
             factory_id=factory.id,
             provider="openai-compatible",
             base_url=base_url,
-            model=payload.provider_model or settings.provider_model,
+            model=provider_model,
             encrypted_api_key=encrypted_api_key,
             permissions=payload.tool_permissions,
         )
     )
-    record_event(db, factory.id, "factory_created", {"name": factory.name}, actor_type="user", actor_id=user.id)
+    record_event(
+        db,
+        factory.id,
+        "factory_created",
+        {"name": factory.name, "provider": "openai-compatible", "base_url": base_url, "model": provider_model, "permissions": sorted(set(payload.tool_permissions))},
+        actor_type="user",
+        actor_id=user.id,
+    )
     db.commit()
     db.refresh(factory)
     return _factory_response(factory)
@@ -295,7 +303,14 @@ def update_credentials(factory_id: str, payload: CredentialUpdate, db: Session =
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     credential.permissions = payload.permissions
-    record_event(db, factory.id, "credentials_updated", {"provider": payload.provider}, actor_type="user", actor_id=user.id)
+    record_event(
+        db,
+        factory.id,
+        "credentials_updated",
+        {"provider": payload.provider, "permissions": sorted(set(payload.permissions)), "base_url": payload.base_url, "model": payload.model},
+        actor_type="user",
+        actor_id=user.id,
+    )
     db.commit()
 
 
