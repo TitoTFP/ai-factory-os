@@ -286,6 +286,24 @@ describe("factory UI interactions", () => {
 		expect(await screen.findByText(factoryB.mission)).not.toBeNull();
 	});
 
+	it("retries architecture without creating a duplicate factory", async () => {
+		localStorage.setItem("factory_token", "token-1");
+		apiMock.factories.mockResolvedValue([factoryA]);
+		apiMock.createFactory.mockResolvedValue(factoryB);
+		apiMock.architect.mockRejectedValueOnce(new Error("provider unavailable"));
+		render(React.createElement(App));
+		await screen.findByRole("heading", { name: "Factory Floor" });
+		fireEvent.click(screen.getByRole("button", { name: /Switch factory/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Create factory/ }));
+		fillOnboardingForm();
+		fireEvent.click(screen.getByRole("button", { name: /Create another factory/ }));
+		await screen.findByRole("alert");
+		expect(apiMock.createFactory).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByRole("button", { name: /Retry architecture/ }));
+		await waitFor(() => expect(apiMock.architect).toHaveBeenCalledTimes(2));
+		expect(apiMock.createFactory).toHaveBeenCalledTimes(1);
+	});
+
 	it("opens and closes a detail panel from a floor space", async () => {
 		renderFactoryApp();
 		await screen.findByRole("heading", { name: "Factory Floor" });
@@ -341,6 +359,18 @@ describe("factory UI interactions", () => {
 			factoryA.id,
 			"resume",
 		);
+	});
+
+	it("does not refresh after a stale socket closes", async () => {
+		renderFactoryApp();
+		await screen.findByRole("heading", { name: "Factory Floor" });
+		const socket = TestWebSocket.instances[0];
+		const callsBefore = apiMock.factories.mock.calls.length;
+		fireEvent.click(screen.getByRole("button", { name: /Switch factory/ }));
+		fireEvent.click(screen.getByRole("menuitem", { name: "Alpha" }));
+		socket.end();
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(apiMock.factories.mock.calls.length).toBe(callsBefore);
 	});
 
 	it("reports live WebSocket status and refreshes the floor on an event", async () => {
