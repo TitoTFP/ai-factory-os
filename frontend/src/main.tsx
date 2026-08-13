@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { api, type Factory, type Snapshot } from "./api";
+import {
+	api,
+	type Factory,
+	type FactoryCreateInput,
+	type Snapshot,
+} from "./api";
 import "./styles.css";
 
 type Screen =
@@ -35,8 +40,9 @@ function initialToken(): string {
 	return localStorage.getItem("factory_token") ?? "";
 }
 
-function App() {
+export function App() {
 	const [token, setToken] = useState(initialToken);
+	const [factories, setFactories] = useState<Factory[]>([]);
 	const [factory, setFactory] = useState<Factory | null>(null);
 	const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
 	const [screen, setScreen] = useState<Screen>("floor");
@@ -47,18 +53,14 @@ function App() {
 	const [selected, setSelected] = useState<Record<string, unknown> | null>(
 		null,
 	);
-
-	const loadFactories = async (authToken = token) => {
-		const factories = await api.factories(authToken);
-		if (factories[0]) {
-			setFactory(factories[0]);
-			setSnapshot(await api.snapshot(authToken, factories[0].id));
-		}
-	};
+	const [factoryMenuOpen, setFactoryMenuOpen] = useState(false);
+	const [creatingFactory, setCreatingFactory] = useState(false);
+	const [loading, setLoading] = useState(Boolean(token));
 
 	const handleLoadError = (errorValue: Error) => {
 		if (!localStorage.getItem("factory_token")) {
 			setToken("");
+			setFactories([]);
 			setFactory(null);
 			setSnapshot(null);
 		} else {
@@ -66,21 +68,75 @@ function App() {
 		}
 	};
 
+	const loadFactories = async (
+		authToken = token,
+		preferredFactoryId?: string,
+	) => {
+		setLoading(true);
+		try {
+			const availableFactories = await api.factories(authToken);
+			setFactories(availableFactories);
+			const nextFactory =
+				availableFactories.find(
+					(item) => item.id === (preferredFactoryId ?? factory?.id),
+				) ?? availableFactories[0];
+			if (!nextFactory) {
+				setFactory(null);
+				setSnapshot(null);
+				return;
+			}
+			setFactory(nextFactory);
+			setSnapshot(await api.snapshot(authToken, nextFactory.id));
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const selectFactory = async (nextFactory: Factory) => {
+		setFactoryMenuOpen(false);
+		setCreatingFactory(false);
+		setError("");
+		setFactory(nextFactory);
+		setSnapshot(null);
+		try {
+			setSnapshot(await api.snapshot(token, nextFactory.id));
+		} catch (e) {
+			setError((e as Error).message);
+		}
+	};
+
+	const handleCreated = async (created: Factory) => {
+		setFactoryMenuOpen(false);
+		setCreatingFactory(false);
+		setFactories((current) => [
+			created,
+			...current.filter((item) => item.id !== created.id),
+		]);
+		setFactory(created);
+		setSnapshot(null);
+		try {
+			setSnapshot(await api.snapshot(token, created.id));
+		} catch (e) {
+			setError((e as Error).message);
+		}
+	};
+
 	useEffect(() => {
 		if (!token) return;
-		loadFactories().catch(handleLoadError);
+		loadFactories(token).catch(handleLoadError);
 	}, [token]);
 
 	useEffect(() => {
-		if (!token || !factory) return;
+		if (!token || !factory || creatingFactory) return;
 		const socket = new WebSocket(api.eventsUrl(token, factory.id));
 		setConnection("connecting");
 		socket.onopen = () => setConnection("live");
-		socket.onmessage = () => loadFactories(token).catch(handleLoadError);
+		socket.onmessage = () =>
+			loadFactories(token, factory.id).catch(handleLoadError);
 		socket.onerror = () => setConnection("offline");
 		socket.onclose = () => setConnection("offline");
 		return () => socket.close();
-	}, [token, factory?.id]);
+	}, [token, factory?.id, creatingFactory]);
 
 	if (!token)
 		return (
@@ -91,18 +147,16 @@ function App() {
 				}}
 			/>
 		);
-	if (!factory)
+	if (loading && !factory)
+		return <div className="loading">Loading factories…</div>;
+	if (!factory || creatingFactory)
 		return (
 			<Onboarding
 				token={token}
-				onCreated={(value) => {
-					setFactory(value);
-					api
-						.snapshot(token, value.id)
-						.then(setSnapshot)
-						.catch((e: Error) => setError(e.message));
-				}}
+				onCreated={handleCreated}
+				onCancel={factory ? () => setCreatingFactory(false) : undefined}
 				error={error}
+				isCreating={Boolean(factory)}
 			/>
 		);
 
@@ -129,9 +183,59 @@ function App() {
 						FACTORY<span className="muted">OS</span>
 					</span>
 				</div>
-				<div className="factory-switcher">
-					<span className="pulse" /> <span>{factory.name}</span>
-					<span className="chevron">⌄</span>
+				<div style={{ position: "relative" }}>
+					<button
+						type="button"
+						className="factory-switcher"
+						aria-haspopup="menu"
+						aria-expanded={factoryMenuOpen}
+						aria-label={`Switch factory (current: ${factory.name})`}
+						onClick={() => setFactoryMenuOpen((open) => !open)}
+					>
+						<span className="pulse" /> <span>{factory.name}</span>
+						<span className="chevron">⌄</span>
+					</button>
+					{factoryMenuOpen && (
+						<div
+							className="factory-menu panel"
+							role="menu"
+							aria-label="Factories"
+							style={{
+								position: "absolute",
+								top: "calc(100% + 4px)",
+								left: 0,
+								width: "min(218px, calc(100vw - 32px))",
+								padding: 7,
+								zIndex: 3,
+								display: "grid",
+								gap: 3,
+							}}
+						>
+							{factories.map((item) => (
+								<button
+									type="button"
+									className="nav-item"
+									role="menuitem"
+									aria-current={item.id === factory.id ? "true" : undefined}
+									aria-label={item.name}
+									key={item.id}
+									onClick={() => selectFactory(item)}
+								>
+									{item.name}
+								</button>
+							))}
+							<button
+								type="button"
+								className="secondary full"
+								onClick={() => {
+									setFactoryMenuOpen(false);
+									setCreatingFactory(true);
+								}}
+							>
+								＋ Create factory
+							</button>
+						</div>
+					)}
 				</div>
 				<nav>
 					{nav.map((item) => (
@@ -150,7 +254,7 @@ function App() {
 					))}
 				</nav>
 				<div className="sidebar-bottom">
-					<div className="live-indicator">
+					<div className="live-indicator" role="status" aria-live="polite">
 						<span className="pulse" /> Runtime {connection}
 					</div>
 					<button
@@ -177,11 +281,11 @@ function App() {
 						</h1>
 					</div>
 					<div className="top-actions">
-						<span className={`connection ${connection}`}>
+						<span className={`connection ${connection}`} role="status">
 							<span className="pulse" />{" "}
 							{connection === "live" ? "Live" : connection}
 						</span>
-						<button className="avatar">
+						<button className="avatar" type="button">
 							{factory.name.slice(0, 1).toUpperCase()}
 						</button>
 					</div>
@@ -189,7 +293,11 @@ function App() {
 				{error && (
 					<div className="error-banner" role="alert" aria-live="polite">
 						{error}
-						<button aria-label="Dismiss error" onClick={() => setError("")}>
+						<button
+							type="button"
+							aria-label="Dismiss error"
+							onClick={() => setError("")}
+						>
 							×
 						</button>
 					</div>
@@ -324,17 +432,21 @@ function Auth({ onAuth }: { onAuth: (token: string) => void }) {
 function Onboarding({
 	token,
 	onCreated,
+	onCancel,
 	error,
+	isCreating = false,
 }: {
 	token: string;
-	onCreated: (factory: Factory) => void;
+	onCreated: (factory: Factory) => void | Promise<void>;
+	onCancel?: () => void;
 	error: string;
+	isCreating?: boolean;
 }) {
-	const [form, setForm] = useState({
+	const [form, setForm] = useState<FactoryCreateInput>({
 		name: "",
 		mission: "",
 		primary_objective: "",
-		constraints: "",
+		constraints: [],
 		autonomy: "mostly_autonomous",
 		tool_permissions: ["workspace", "web_fetch", "http"],
 		provider_api_key: "",
@@ -348,13 +460,7 @@ function Onboarding({
 		setBusy(true);
 		setLocalError("");
 		try {
-			const created = await api.createFactory(token, {
-				...form,
-				constraints: form.constraints
-					.split("\n")
-					.map((x) => x.trim())
-					.filter(Boolean),
-			});
+			const created = await api.createFactory(token, form);
 			await api.architect(token, created.id);
 			onCreated(created);
 		} catch (e) {
@@ -423,7 +529,12 @@ function Onboarding({
 					Autonomy
 					<select
 						value={form.autonomy}
-						onChange={(e) => setForm({ ...form, autonomy: e.target.value })}
+						onChange={(e) =>
+							setForm({
+								...form,
+								autonomy: e.target.value as FactoryCreateInput["autonomy"],
+							})
+						}
 					>
 						<option value="mostly_autonomous">Mostly autonomous</option>
 						<option value="fully_autonomous">Fully autonomous</option>
@@ -457,8 +568,16 @@ function Onboarding({
 				<label>
 					Constraints <span className="label-hint">one per line</span>
 					<textarea
-						value={form.constraints}
-						onChange={(e) => setForm({ ...form, constraints: e.target.value })}
+						value={form.constraints.join("\n")}
+						onChange={(e) =>
+							setForm({
+								...form,
+								constraints: e.target.value
+									.split("\n")
+									.map((x) => x.trim())
+									.filter(Boolean),
+							})
+						}
 						placeholder="Budget, market, principles…"
 					/>
 				</label>
@@ -507,10 +626,26 @@ function Onboarding({
 						{error || localError}
 					</p>
 				)}
-				<button className="primary full" disabled={busy}>
-					{busy ? "Creating architecture…" : "Create factory architecture"}{" "}
-					<span>→</span>
-				</button>
+				<div className="onboard-actions">
+					{onCancel && (
+						<button
+							type="button"
+							className="secondary"
+							onClick={onCancel}
+							disabled={busy}
+						>
+							Cancel
+						</button>
+					)}
+					<button className="primary full" disabled={busy}>
+						{busy
+							? "Creating architecture…"
+							: isCreating
+								? "Create another factory"
+								: "Create factory architecture"}{" "}
+						<span>→</span>
+					</button>
+				</div>
 			</form>
 		</div>
 	);
@@ -832,8 +967,11 @@ function DetailPanel({
 	);
 }
 
-createRoot(document.getElementById("root")!).render(
-	<React.StrictMode>
-		<App />
-	</React.StrictMode>,
-);
+const root = document.getElementById("root");
+if (root) {
+	createRoot(root).render(
+		<React.StrictMode>
+			<App />
+		</React.StrictMode>,
+	);
+}

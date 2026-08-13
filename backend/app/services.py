@@ -469,6 +469,7 @@ class Runtime:
             run = db.scalar(select(FactoryRun).where(FactoryRun.factory_id == factory_id, FactoryRun.status == "running"))
             if not factory or not run:
                 return
+            await self._process_inbox(db, factory)
             current_time = now()
             stale_before = current_time - timedelta(seconds=settings.task_lease_seconds)
             stale_tasks = list(db.scalars(select(Task).where(
@@ -500,6 +501,109 @@ class Runtime:
         finally:
             db.close()
 
+    async def _process_inbox(self, db: Session, factory: Factory) -> None:
+        """Turn typed agent inbox messages into durable work exactly once."""
+        messages = list(db.scalars(select(Message).where(
+            Message.factory_id == factory.id,
+            Message.recipient_agent_id.is_not(None),
+            Message.status.in_(["queued", "delivered"]),
+            Message.read_at.is_(None),
+        ).order_by(Message.created_at).limit(50)))
+        for message in messages:
+            if message.message_type in {"TASK_REQUEST", "REVIEW_REQUEST"}:
+                payload = message.payload if isinstance(message.payload, dict) else {}
+                task_id = payload.get("task_id")
+                # TASK_REQUEST.task_id is an idempotency hint for an existing
+                # delegated task. REVIEW_REQUEST.task_id identifies the source
+                # task and must still create a distinct review task.
+                existing = db.scalar(select(Task).where(Task.id == task_id, Task.factory_id == factory.id)) if task_id and message.message_type == "TASK_REQUEST" else None
+                if not existing:
+                    goal_id = payload.get("goal_id")
+                    if goal_id and not db.scalar(select(Goal).where(Goal.id == goal_id, Goal.factory_id == factory.id)):
+                        goal_id = None
+                    parent_id = payload.get("parent_id")
+                    if parent_id and not db.scalar(select(Task).where(Task.id == parent_id, Task.factory_id == factory.id)):
+                        parent_id = None
+                    description = message.body
+                    if message.message_type == "REVIEW_REQUEST":
+                        artifact_id = payload.get("artifact_id")
+                        artifact = db.scalar(select(Artifact).where(Artifact.id == artifact_id, Artifact.factory_id == factory.id))
+                        if not artifact:
+                            message.status = "failed"
+                            message.read_at = now()
+                            continue
+                        description = f"Review artifact {artifact.name} ({artifact.id}).\n{message.body}\nArtifact content:\n{artifact.content}"
+                    inputs = dict(payload.get("inputs", {}) if isinstance(payload.get("inputs", {}), dict) else {})
+                    if message.message_type == "REVIEW_REQUEST":
+                        inputs["review_artifact_id"] = payload.get("artifact_id")
+                    if message.sender_agent_id:
+                        inputs["reply_to_agent_id"] = message.sender_agent_id
+                    inputs["request_message_id"] = message.id
+                    task = Task(
+                        factory_id=factory.id,
+                        goal_id=goal_id,
+                        parent_id=parent_id,
+                        assignee_id=message.recipient_agent_id,
+                        title=message.subject or ("Artifact review" if message.message_type == "REVIEW_REQUEST" else "Delegated task"),
+                        description=description,
+                        inputs=inputs,
+                        created_by=message.sender_agent_id or "agent",
+                    )
+                    db.add(task)
+                    db.flush()
+                    message.payload = {**payload, "task_id": task.id}
+                    record_event(db, factory.id, "artifact_review_task_created" if message.message_type == "REVIEW_REQUEST" else "task_delegated", {"task_id": task.id, "message_id": message.id})
+            message.status = "read"
+            message.delivered_at = message.delivered_at or now()
+            message.read_at = now()
+        if messages:
+            db.commit()
+
+    @staticmethod
+    def _agent_tools(db: Session, factory_id: str) -> list[dict[str, Any]]:
+        tools = []
+        for tool in db.scalars(select(Tool).where(Tool.factory_id == factory_id, Tool.enabled.is_(True))):
+            if tool.name == "workspace":
+                properties = {"operation": {"type": "string", "enum": ["read", "write"]}, "path": {"type": "string"}, "content": {"type": "string"}}
+            elif tool.name == "web_fetch":
+                properties = {"url": {"type": "string"}, "artifact_name": {"type": "string"}}
+            else:
+                properties = {"url": {"type": "string"}, "method": {"type": "string"}, "body": {"type": "object"}, "artifact_name": {"type": "string"}}
+            tools.append({"type": "function", "function": {"name": tool.name, "description": tool.description, "parameters": {"type": "object", "properties": properties}}})
+        tools.extend([
+            {"type": "function", "function": {"name": "delegate_task", "description": "Delegate a task to another agent.", "parameters": {"type": "object", "properties": {"agent_id": {"type": "string"}, "title": {"type": "string"}, "description": {"type": "string"}, "goal_id": {"type": "string"}, "inputs": {"type": "object"}}, "required": ["agent_id", "title", "description"]}}},
+            {"type": "function", "function": {"name": "request_review", "description": "Ask another agent to review an artifact.", "parameters": {"type": "object", "properties": {"agent_id": {"type": "string"}, "artifact_id": {"type": "string"}, "task_id": {"type": "string"}, "instructions": {"type": "string"}}, "required": ["agent_id", "artifact_id"]}}},
+            {"type": "function", "function": {"name": "reorganize", "description": "Apply a durable organization change when workload requires it.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["hire", "hibernate", "merge", "move"]}, "agent_id": {"type": "string"}, "target_agent_id": {"type": "string"}, "space_id": {"type": "string"}}, "required": ["action"]}}},
+        ])
+        return tools
+
+    async def _model_action(self, db: Session, factory: Factory, agent: Agent | None, task: Task, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if name in {"workspace", "web_fetch", "http"}:
+            return await execute_tool(db, factory, agent, task, name, arguments)
+        if name == "delegate_task":
+            target = db.scalar(select(Agent).where(Agent.id == arguments.get("agent_id"), Agent.factory_id == factory.id, Agent.status != "hibernated"))
+            if not target:
+                raise ValueError("delegation target is not available")
+            message = Message(factory_id=factory.id, sender_agent_id=agent.id if agent else None, recipient_agent_id=target.id, message_type="TASK_REQUEST", subject=str(arguments.get("title", "Delegated task"))[:240], body=str(arguments.get("description", "")), payload={"goal_id": arguments.get("goal_id"), "parent_id": task.id, "inputs": arguments.get("inputs", {})}, correlation_id=task.id, status="delivered", delivered_at=now())
+            db.add(message)
+            db.flush()
+            record_event(db, factory.id, "agent_delegated_task", {"task_id": task.id, "message_id": message.id, "recipient_agent_id": target.id}, actor_type="agent" if agent else "system", actor_id=agent.id if agent else "system")
+            return {"message_id": message.id, "recipient_agent_id": target.id}
+        if name == "request_review":
+            artifact = db.scalar(select(Artifact).where(Artifact.id == arguments.get("artifact_id"), Artifact.factory_id == factory.id))
+            target = db.scalar(select(Agent).where(Agent.id == arguments.get("agent_id"), Agent.factory_id == factory.id, Agent.status != "hibernated"))
+            if not artifact or not target:
+                raise ValueError("review artifact or agent is not available")
+            message = Message(factory_id=factory.id, sender_agent_id=agent.id if agent else None, recipient_agent_id=target.id, message_type="REVIEW_REQUEST", subject="Review artifact", body=str(arguments.get("instructions", "Review the artifact and report findings.")), payload={"artifact_id": artifact.id, "task_id": arguments.get("task_id") or task.id}, correlation_id=task.id, status="delivered", delivered_at=now())
+            db.add(message)
+            db.flush()
+            record_event(db, factory.id, "artifact_review_requested", {"artifact_id": artifact.id, "message_id": message.id})
+            return {"message_id": message.id, "artifact_id": artifact.id}
+        if name == "reorganize":
+            await self.reorganize(factory.id, str(arguments.get("action", "")), agent_id=arguments.get("agent_id") or (agent.id if agent else None), target_agent_id=arguments.get("target_agent_id"), space_id=arguments.get("space_id"))
+            return {"action": arguments.get("action")}
+        raise ValueError(f"unknown model action: {name}")
+
     async def _process_task(self, db: Session, factory: Factory, task: Task) -> None:
         agent = db.scalar(select(Agent).where(Agent.id == task.assignee_id, Agent.factory_id == factory.id, Agent.status != "hibernated")) if task.assignee_id else db.scalar(select(Agent).where(Agent.factory_id == factory.id, Agent.status != "hibernated"))
         task.status = "running"
@@ -516,16 +620,39 @@ class Runtime:
                 if agent and agent.budget.get("max_tokens") and int(agent.budget.get("used_tokens", 0)) >= int(agent.budget["max_tokens"]):
                     raise ServiceError("agent token budget exhausted")
                 provider = provider_for(db, factory.id)
-                text = await provider.chat(
-                    [
-                        {"role": "system", "content": agent.system_prompt if agent else "You are a factory worker."},
-                        {"role": "user", "content": f"Task: {task.title}\n{task.description}"},
-                    ]
-                )
-                _record_usage(db, factory.id, provider.last_response, agent_id=agent.id if agent else None, task_id=task.id, model=provider.config.model)
+                messages = [
+                    {"role": "system", "content": (agent.system_prompt if agent else "You are a factory worker.") + " Use tools when useful; return concise results."},
+                    {"role": "user", "content": f"Task: {task.title}\n{task.description}"},
+                ]
+                tools = self._agent_tools(db, factory.id)
+                try:
+                    text = await provider.chat(messages, tools=tools)
+                except TypeError as exc:
+                    # Keep simple test doubles and older OpenAI-compatible adapters
+                    # usable while production adapters receive the tool schema.
+                    if "tools" not in str(exc):
+                        raise
+                    text = await provider.chat(messages)
+                response = provider.last_response
+                if not response.content and text:
+                    response = ProviderResponse(
+                        content=text,
+                        prompt_tokens=response.prompt_tokens,
+                        completion_tokens=response.completion_tokens,
+                        total_tokens=response.total_tokens,
+                        tool_calls=response.tool_calls,
+                    )
+                _record_usage(db, factory.id, response, agent_id=agent.id if agent else None, task_id=task.id, model=provider.config.model)
+                tool_results = []
+                for call in response.tool_calls:
+                    tool_results.append({"tool": call.name, "result": await self._model_action(db, factory, agent, task, call.name, call.arguments)})
+                # A provider may return a tool call without assistant prose. Keep the
+                # tool output as durable evidence instead of producing an empty artifact.
+                if not text and tool_results:
+                    text = json.dumps(tool_results, ensure_ascii=False)
                 if agent:
-                    agent.budget = {**agent.budget, "used_tokens": int(agent.budget.get("used_tokens", 0)) + provider.last_response.total_tokens, "requests": int(agent.budget.get("requests", 0)) + 1}
-                tool_result = {"content": text}
+                    agent.budget = {**agent.budget, "used_tokens": int(agent.budget.get("used_tokens", 0)) + response.total_tokens, "requests": int(agent.budget.get("requests", 0)) + 1}
+                tool_result = {"content": text, "tool_calls": tool_results} if tool_results else {"content": text}
             filename = f"{task.id}.md"
             artifact_content = json.dumps(tool_result, ensure_ascii=False, indent=2) if not isinstance(tool_result.get("content"), str) else tool_result["content"]
             relative = write_workspace_artifact(factory.id, filename, artifact_content)
@@ -548,14 +675,20 @@ class Runtime:
             if agent:
                 agent.status = "idle"
                 agent.current_task_id = None
+            reply_to = task.inputs.get("reply_to_agent_id")
+            recipient = db.scalar(select(Agent).where(Agent.id == reply_to, Agent.factory_id == factory.id)) if reply_to else None
+            reply_type = "REVIEW_RESULT" if task.inputs.get("review_artifact_id") else "TASK_RESULT"
             message = Message(
                 factory_id=factory.id,
                 sender_agent_id=agent.id if agent else None,
-                recipient_agent_id=None,
-                message_type="TASK_RESULT",
+                recipient_agent_id=recipient.id if recipient else None,
+                message_type=reply_type,
                 subject=task.title,
                 body=f"Completed task and created {filename}.",
-                payload={"task_id": task.id, "artifact_id": artifact.id},
+                payload={"task_id": task.id, "artifact_id": artifact.id, "review_artifact_id": task.inputs.get("review_artifact_id")},
+                correlation_id=task.inputs.get("request_message_id") or task.id,
+                status="delivered" if recipient else "queued",
+                delivered_at=now() if recipient else None,
             )
             db.add(message)
             db.flush()
@@ -564,9 +697,10 @@ class Runtime:
             await self._maybe_reorganize(factory.id)
         except Exception as exc:
             db.rollback()
-            task = db.get(Task, task.id)
-            if not task:
+            recovered_task = db.get(Task, task.id)
+            if recovered_task is None:
                 return
+            task = recovered_task
             task.retry_count += 1
             task.lease_until = None
             task.error = str(exc)
@@ -580,6 +714,18 @@ class Runtime:
                 agent.status = "blocked" if task.status == "failed" else "idle"
                 agent.current_task_id = None
             record_event(db, factory.id, "task_failed", {"task_id": task.id, "error": str(exc), "retry_count": task.retry_count})
+            if task.status == "failed":
+                db.add(Message(
+                    factory_id=factory.id,
+                    sender_agent_id=agent.id if agent else None,
+                    message_type="ESCALATION",
+                    subject=f"Task failed: {task.title}",
+                    body=task.error,
+                    payload={"task_id": task.id, "retry_count": task.retry_count},
+                    correlation_id=task.id,
+                    status="queued",
+                ))
+                record_event(db, factory.id, "task_escalated", {"task_id": task.id})
             db.commit()
 
     async def _maybe_reorganize(self, factory_id: str) -> None:
@@ -629,21 +775,47 @@ class Runtime:
             elif not agent:
                 raise ServiceError("agent is required")
             elif action == "hibernate":
+                reassigned = list(db.scalars(select(Task).where(Task.factory_id == factory_id, Task.assignee_id == agent.id, Task.status.in_(["queued", "running"]))))
+                for task in reassigned:
+                    task.assignee_id = None
+                    task.status = "queued"
+                    task.lease_until = None
+                    task.error = "requeued because assigned agent was hibernated"
                 agent.status = "hibernated"
-                detail = {"action": action, "agent_id": agent.id}
-            elif action == "move" or action == "move_responsibility":
+                agent.current_task_id = None
+                detail = {"action": action, "agent_id": agent.id, "requeued_tasks": [task.id for task in reassigned]}
+            elif action == "move":
                 target_space = db.get(Space, space_id) if space_id else None
                 if not target_space or target_space.factory_id != factory_id:
                     raise ServiceError("target space does not belong to factory")
                 agent.space_id = target_space.id
-                detail = {"action": "move", "agent_id": agent.id, "space_id": target_space.id}
+                detail = {"action": action, "agent_id": agent.id, "space_id": target_space.id}
+            elif action == "move_responsibility":
+                target = db.get(Agent, target_agent_id) if target_agent_id else None
+                if not target or target.factory_id != factory_id or target.id == agent.id:
+                    raise ServiceError("responsibility target does not belong to factory")
+                responsibilities = list(agent.responsibilities)
+                if not responsibilities:
+                    raise ServiceError("agent has no responsibility to move")
+                responsibility = responsibilities.pop(0)
+                agent.responsibilities = responsibilities
+                target.responsibilities = list(dict.fromkeys([*target.responsibilities, responsibility]))
+                detail = {"action": action, "agent_id": agent.id, "target_agent_id": target.id, "responsibility": responsibility}
             elif action == "merge":
                 target = db.get(Agent, target_agent_id) if target_agent_id else None
                 if not target or target.factory_id != factory_id or target.id == agent.id:
                     raise ServiceError("merge target does not belong to factory")
+                reassigned = list(db.scalars(select(Task).where(Task.factory_id == factory_id, Task.assignee_id == agent.id, Task.status.in_(["queued", "running"]))))
+                for task in reassigned:
+                    task.assignee_id = target.id
+                    task.lease_until = None
+                    if task.status == "running":
+                        task.status = "queued"
                 target.responsibilities = list(dict.fromkeys([*target.responsibilities, *agent.responsibilities]))
+                target.relationships = {**target.relationships, **agent.relationships}
                 agent.status = "merged"
-                detail = {"action": "merge", "agent_id": agent.id, "target_agent_id": target.id}
+                agent.current_task_id = None
+                detail = {"action": action, "agent_id": agent.id, "target_agent_id": target.id, "reassigned_tasks": [task.id for task in reassigned]}
             else:
                 raise ServiceError("unsupported organization action")
             record_event(db, factory_id, "organization_changed", detail)

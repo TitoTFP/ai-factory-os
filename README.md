@@ -8,7 +8,7 @@ AI Factory OS is a durable, multi-tenant workspace where specialized agents shar
 - Email/password auth plus callback endpoints for GitHub and Google OAuth
 - Factory → Space → Agent → Goal/Task → Message/Artifact/Event primitives
 - Factory Architect backed by a real OpenAI-compatible chat endpoint
-- Durable start/pause/stop/resume runtime with retries, goal evaluation, and queue-pressure reorganization
+- Durable start/pause/stop/resume runtime with leased task recovery, retries/escalation, criteria evaluation, model-selected tools, agent delegation/review, and durable reorganization
 - Per-factory encrypted provider credentials and tool permissions
 - Workspace file tools, web fetch, and generic HTTP methods
 - Factory Floor, onboarding, detail drawers, lifecycle controls, live WebSocket status, activity feed, and estimated token/cost usage
@@ -71,4 +71,4 @@ DATABASE_URL=sqlite:///./migration-check.db PYTHONPATH=backend .venv/bin/alembic
 git diff --check
 ```
 
-The backend test suite covers auth, OAuth callback behavior, tenant isolation across resource routes, Architect persistence, criteria evaluation, typed message delivery/idempotency, task/artifact/event execution, workspace traversal, recovery, reorganization, usage accounting, and tool auditing. Frontend tests assert the required surface is present; build/type checking is the primary UI gate. Docker Compose is the supported PostgreSQL deployment path; if Docker is unavailable, run the local SQLite tests and migration check instead.
+The backend test suite covers auth, OAuth callback behavior, tenant isolation across resource routes, Architect persistence, criteria evaluation, typed message delivery/idempotency, task/artifact/event execution, workspace traversal, recovery, agent delegation/review messaging, retry escalation, reorganization, usage accounting, and tool auditing. Frontend tests exercise onboarding, factory switching/creation, detail views, lifecycle controls, and WebSocket live status. Docker Compose is the supported PostgreSQL deployment path; if Docker is unavailable, run the local SQLite tests and migration check instead.

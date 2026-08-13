@@ -8,6 +8,18 @@ export type Factory = {
 	autonomy: string;
 	status: string;
 };
+
+export type FactoryCreateInput = {
+	name: string;
+	mission: string;
+	primary_objective: string;
+	constraints: string[];
+	autonomy: "mostly_autonomous" | "fully_autonomous" | "supervised";
+	provider_api_key: string;
+	provider_base_url: string;
+	provider_model: string;
+	tool_permissions: string[];
+};
 export type Space = {
 	id: string;
 	factory_id: string;
@@ -142,7 +154,7 @@ export const api = {
 		request<Factory[]>("/api/factories", {
 			headers: { Authorization: `Bearer ${token}` },
 		}),
-	createFactory: (token: string, input: Record<string, unknown>) =>
+	createFactory: (token: string, input: FactoryCreateInput) =>
 		request<Factory>("/api/factories", {
 			method: "POST",
 			headers: { Authorization: `Bearer ${token}` },
