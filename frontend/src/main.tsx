@@ -79,6 +79,7 @@ export function App() {
 		setLoading(true);
 		try {
 			const availableFactories = await api.factories(authToken);
+			if (generation !== loadGeneration.current) return;
 			setFactories(availableFactories);
 			const nextFactory =
 				availableFactories.find(
@@ -118,6 +119,7 @@ export function App() {
 	};
 
 	const handleCreated = async (created: Factory) => {
+		++loadGeneration.current;
 		setFactoryMenuOpen(false);
 		setCreatingFactory(false);
 		setDraftFactory(null);

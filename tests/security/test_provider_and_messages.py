@@ -80,6 +80,45 @@ def test_model_tool_schema_exposes_move_responsibility_and_provider_call(databas
         db.close()
 
 
+def test_credential_permission_updates_sync_runtime_tools(client, auth, database):
+    factory = client.post(
+        "/api/factories",
+        headers=auth,
+        json={
+            "name": "Permissions",
+            "mission": "m",
+            "primary_objective": "o",
+            "provider_api_key": "secret",
+            "tool_permissions": ["workspace", "http"],
+        },
+    ).json()
+    factory_id = factory["id"]
+    db = SessionLocal()
+    try:
+        db.add_all([
+            Tool(factory_id=factory_id, name="workspace", enabled=True, permissions=["read", "write"]),
+            Tool(factory_id=factory_id, name="web_fetch", enabled=False, permissions=[]),
+            Tool(factory_id=factory_id, name="http", enabled=True, permissions=["GET", "POST", "PUT", "DELETE"]),
+        ])
+        db.commit()
+    finally:
+        db.close()
+    response = client.put(
+        f"/api/factories/{factory_id}/credentials",
+        headers=auth,
+        json={"base_url": "https://api.openai.com/v1", "model": "test", "api_key": "secret", "permissions": ["web_fetch"]},
+    )
+    assert response.status_code == 204
+    db = SessionLocal()
+    try:
+        tools = {tool.name: tool for tool in db.scalars(select(Tool).where(Tool.factory_id == factory_id))}
+        assert tools["workspace"].enabled is False and tools["workspace"].permissions == []
+        assert tools["web_fetch"].enabled is True and tools["web_fetch"].permissions == ["GET"]
+        assert tools["http"].enabled is False and tools["http"].permissions == []
+    finally:
+        db.close()
+
+
 def test_message_idempotency_and_delivery(client, auth):
     factory = client.post("/api/factories", headers=auth, json={"name": "Messages", "mission": "m", "primary_objective": "o", "provider_api_key": "secret", "tool_permissions": ["workspace", "http"]}).json()
     factory_id = factory["id"]

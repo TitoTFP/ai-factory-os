@@ -301,7 +301,15 @@ def update_credentials(factory_id: str, payload: CredentialUpdate, db: Session =
         credential.encrypted_api_key = encrypt_secret(payload.api_key.get_secret_value())
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    credential.permissions = payload.permissions
+    credential.permissions = sorted(set(payload.permissions))
+    for tool in db.scalars(select(models.Tool).where(models.Tool.factory_id == factory.id)):
+        if tool.name in {"workspace", "web_fetch", "http"}:
+            tool.enabled = tool.name in credential.permissions
+            tool.permissions = {
+                "workspace": [permission for permission in ("read", "write") if tool.name in credential.permissions],
+                "web_fetch": ["GET"] if tool.name in credential.permissions else [],
+                "http": [method for method in ("GET", "POST", "PUT", "DELETE") if tool.name in credential.permissions],
+            }[tool.name]
     record_event(
         db,
         factory.id,
