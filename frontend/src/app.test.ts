@@ -253,6 +253,40 @@ describe("factory UI interactions", () => {
 		).not.toBeNull();
 	});
 
+	it("counts only unread messages in the navigation badge", async () => {
+		const withMessages = snapshotFor(factoryA);
+		withMessages.messages = [
+			{
+				id: "read-message",
+				factory_id: factoryA.id,
+				sender_agent_id: null,
+				recipient_agent_id: null,
+				message_type: "MESSAGE",
+				subject: "Read",
+				body: "read",
+				payload: {},
+				status: "read",
+			},
+			{
+				id: "new-message",
+				factory_id: factoryA.id,
+				sender_agent_id: null,
+				recipient_agent_id: null,
+				message_type: "MESSAGE",
+				subject: "New",
+				body: "new",
+				payload: {},
+				status: "delivered",
+			},
+		];
+		apiMock.snapshot.mockResolvedValue(withMessages);
+		localStorage.setItem("factory_token", "token-1");
+		apiMock.factories.mockResolvedValue([factoryA]);
+		render(React.createElement(App));
+		await screen.findByRole("heading", { name: "Factory Floor" });
+		expect(screen.getByLabelText("Unread messages").textContent).toBe("1");
+	});
+
 	it("switches factories from the existing factory menu", async () => {
 		renderFactoryApp([factoryA, factoryB]);
 		await screen.findByRole("heading", { name: "Factory Floor" });

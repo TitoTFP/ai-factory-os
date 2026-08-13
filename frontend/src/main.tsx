@@ -299,8 +299,10 @@ export function App() {
 						>
 							<span className="nav-icon">{item.icon}</span>
 							{item.label}
-							{item.id === "messages" && snapshot?.messages.length ? (
-								<span className="nav-count">{snapshot.messages.length}</span>
+							{item.id === "messages" && snapshot?.messages.filter((message) => message.status !== "read").length ? (
+								<span className="nav-count" aria-label="Unread messages">
+									{snapshot.messages.filter((message) => message.status !== "read").length}
+								</span>
 							) : null}
 						</button>
 					))}
