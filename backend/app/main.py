@@ -54,7 +54,6 @@ async def lifespan(_: FastAPI):
     if settings.environment == "production":
         settings.validate()
     Base.metadata.create_all(bind=engine)
-    await runtime.recover_abandoned_tasks()
     await runtime.start()
     yield
     await runtime.shutdown()

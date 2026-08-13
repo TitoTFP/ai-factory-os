@@ -151,11 +151,21 @@ def test_agent_delegation_and_review_round_trip(database):
         db.commit()
         runtime = Runtime()
         asyncio.run(runtime._model_action(db, factory, sender, task, "delegate_task", {"agent_id": recipient.id, "title": "Review draft", "description": "Review it"}))
+        db.flush()
+        delegation_event = db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "agent_delegated_task"))
+        assert delegation_event is not None
+        assert delegation_event.payload["sender_agent_id"] == sender.id
+        assert delegation_event.payload["recipient_agent_id"] == recipient.id
         asyncio.run(runtime._process_inbox(db, factory))
         delegated = db.scalar(select(Task).where(Task.assignee_id == recipient.id, Task.title == "Review draft"))
         assert delegated is not None
         assert delegated.inputs["reply_to_agent_id"] == sender.id
         asyncio.run(runtime._model_action(db, factory, sender, task, "request_review", {"agent_id": recipient.id, "artifact_id": artifact.id, "instructions": "Check draft"}))
+        db.flush()
+        review_event = db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "artifact_review_requested"))
+        assert review_event is not None
+        assert review_event.payload["task_id"] == task.id
+        assert review_event.payload["artifact_id"] == artifact.id
         asyncio.run(runtime._process_inbox(db, factory))
         review = db.scalar(select(Task).where(Task.assignee_id == recipient.id, Task.inputs["review_artifact_id"].as_string() == artifact.id))
         assert review is not None
@@ -243,7 +253,12 @@ def test_runtime_restart_requeues_and_resumes_stale_work(database):
         db.commit()
 
         runtime = Runtime()
-        asyncio.run(runtime.recover_abandoned_tasks())
+
+        async def start_and_stop() -> None:
+            await runtime.start()
+            await runtime.shutdown()
+
+        asyncio.run(start_and_stop())
         db.expire_all()
         recovered = db.get(Task, task.id)
         recovered_agent = db.get(Agent, agent.id)

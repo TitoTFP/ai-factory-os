@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
 	api,
@@ -55,7 +55,10 @@ export function App() {
 	);
 	const [factoryMenuOpen, setFactoryMenuOpen] = useState(false);
 	const [creatingFactory, setCreatingFactory] = useState(false);
+	const [lifecycleBusy, setLifecycleBusy] = useState(false);
+	const [draftFactory, setDraftFactory] = useState<Factory | null>(null);
 	const [loading, setLoading] = useState(Boolean(token));
+	const loadGeneration = useRef(0);
 
 	const handleLoadError = (errorValue: Error) => {
 		if (!localStorage.getItem("factory_token")) {
@@ -72,6 +75,7 @@ export function App() {
 		authToken = token,
 		preferredFactoryId?: string,
 	) => {
+		const generation = ++loadGeneration.current;
 		setLoading(true);
 		try {
 			const availableFactories = await api.factories(authToken);
@@ -85,8 +89,10 @@ export function App() {
 				setSnapshot(null);
 				return;
 			}
+			const nextSnapshot = await api.snapshot(authToken, nextFactory.id);
+			if (generation !== loadGeneration.current) return;
 			setFactory(nextFactory);
-			setSnapshot(await api.snapshot(authToken, nextFactory.id));
+			setSnapshot(nextSnapshot);
 		} finally {
 			setLoading(false);
 		}
@@ -95,11 +101,17 @@ export function App() {
 	const selectFactory = async (nextFactory: Factory) => {
 		setFactoryMenuOpen(false);
 		setCreatingFactory(false);
+		setDraftFactory(null);
 		setError("");
 		setFactory(nextFactory);
 		setSnapshot(null);
+		const selectedId = nextFactory.id;
+		const generation = ++loadGeneration.current;
 		try {
-			setSnapshot(await api.snapshot(token, nextFactory.id));
+			const nextSnapshot = await api.snapshot(token, selectedId);
+			if (generation !== loadGeneration.current) return;
+			setFactory(nextFactory);
+			setSnapshot(nextSnapshot);
 		} catch (e) {
 			setError((e as Error).message);
 		}
@@ -108,6 +120,7 @@ export function App() {
 	const handleCreated = async (created: Factory) => {
 		setFactoryMenuOpen(false);
 		setCreatingFactory(false);
+		setDraftFactory(null);
 		setFactories((current) => [
 			created,
 			...current.filter((item) => item.id !== created.id),
@@ -128,14 +141,45 @@ export function App() {
 
 	useEffect(() => {
 		if (!token || !factory || creatingFactory) return;
-		const socket = new WebSocket(api.eventsUrl(token, factory.id));
-		setConnection("connecting");
-		socket.onopen = () => setConnection("live");
-		socket.onmessage = () =>
-			loadFactories(token, factory.id).catch(handleLoadError);
-		socket.onerror = () => setConnection("offline");
-		socket.onclose = () => setConnection("offline");
-		return () => socket.close();
+		const selectedId = factory.id;
+		let current = true;
+		let reconnectAttempt = 0;
+		let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+		let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+		let socket: WebSocket;
+		const connect = () => {
+			if (!current) return;
+			socket = new WebSocket(api.eventsUrl(token, selectedId));
+			setConnection("connecting");
+			socket.onopen = () => {
+				if (!current) return;
+				reconnectAttempt = 0;
+				setConnection("live");
+			};
+			socket.onmessage = () => {
+				if (refreshTimer) return;
+				refreshTimer = setTimeout(() => {
+					refreshTimer = undefined;
+					if (current) loadFactories(token, selectedId).catch(handleLoadError);
+				}, 50);
+			};
+			socket.onerror = () => {
+				if (current) setConnection("offline");
+			};
+			socket.onclose = () => {
+				if (!current) return;
+				setConnection("offline");
+				const delay = Math.min(10_000, 1_000 * 2 ** reconnectAttempt++);
+				reconnectTimer = setTimeout(connect, delay);
+			};
+		};
+		connect();
+		return () => {
+			current = false;
+			if (reconnectTimer) clearTimeout(reconnectTimer);
+			if (refreshTimer) clearTimeout(refreshTimer);
+			socket.close();
+		};
 	}, [token, factory?.id, creatingFactory]);
 
 	if (!token)
@@ -157,6 +201,8 @@ export function App() {
 				onCancel={factory ? () => setCreatingFactory(false) : undefined}
 				error={error}
 				isCreating={Boolean(factory)}
+				draftFactory={draftFactory}
+				onDraft={(draft) => setDraftFactory(draft)}
 			/>
 		);
 
@@ -166,12 +212,16 @@ export function App() {
 			.then(setSnapshot)
 			.catch((e: Error) => setError(e.message));
 	const invoke = async (action: () => Promise<unknown>) => {
+		if (lifecycleBusy) return;
+		setLifecycleBusy(true);
 		setError("");
 		try {
 			await action();
 			await refresh();
 		} catch (e) {
 			setError((e as Error).message);
+		} finally {
+			setLifecycleBusy(false);
 		}
 	};
 	return (
@@ -303,7 +353,12 @@ export function App() {
 					</div>
 				)}
 				{screen === "floor" ? (
-					<Floor snapshot={snapshot} onAction={invoke} onSelect={setSelected} />
+					<Floor
+						snapshot={snapshot}
+						onAction={invoke}
+						onSelect={setSelected}
+						busy={lifecycleBusy}
+					/>
 				) : (
 					<Collection
 						screen={screen}
@@ -435,12 +490,16 @@ function Onboarding({
 	onCancel,
 	error,
 	isCreating = false,
+	draftFactory,
+	onDraft,
 }: {
 	token: string;
 	onCreated: (factory: Factory) => void | Promise<void>;
 	onCancel?: () => void;
 	error: string;
 	isCreating?: boolean;
+	draftFactory?: Factory | null;
+	onDraft: (factory: Factory | null) => void;
 }) {
 	const [form, setForm] = useState<FactoryCreateInput>({
 		name: "",
@@ -460,7 +519,8 @@ function Onboarding({
 		setBusy(true);
 		setLocalError("");
 		try {
-			const created = await api.createFactory(token, form);
+			const created = draftFactory ?? (await api.createFactory(token, form));
+			onDraft(created);
 			await api.architect(token, created.id);
 			onCreated(created);
 		} catch (e) {
@@ -640,9 +700,11 @@ function Onboarding({
 					<button className="primary full" disabled={busy}>
 						{busy
 							? "Creating architecture…"
-							: isCreating
-								? "Create another factory"
-								: "Create factory architecture"}{" "}
+							: draftFactory
+								? "Retry architecture"
+								: isCreating
+									? "Create another factory"
+									: "Create factory architecture"}{" "}
 						<span>→</span>
 					</button>
 				</div>
@@ -652,17 +714,20 @@ function Onboarding({
 }
 
 function Floor({
-	snapshot,
+		snapshot,
 	onAction,
 	onSelect,
+	busy,
 }: {
 	snapshot: Snapshot | null;
 	onAction: (action: () => Promise<unknown>) => void;
 	onSelect: (item: Record<string, unknown>) => void;
+	busy: boolean;
 }) {
 	if (!snapshot) return <div className="loading">Loading factory state…</div>;
 	const running = snapshot.run?.status === "running";
 	const paused = snapshot.run?.status === "paused";
+	const failed = Boolean(snapshot.run?.last_error);
 	const token = localStorage.getItem("factory_token") ?? "";
 	return (
 		<div className="content-wrap">
@@ -683,6 +748,7 @@ function Floor({
 						<>
 							<button
 								className="secondary"
+								disabled={busy}
 								onClick={() =>
 									onAction(() => api.run(token, snapshot.factory.id, "pause"))
 								}
@@ -691,9 +757,10 @@ function Floor({
 							</button>
 							<button
 								className="secondary"
-								onClick={() =>
-									onAction(() => api.run(token, snapshot.factory.id, "stop"))
-								}
+								disabled={busy}
+								onClick={() => {
+									if (window.confirm("Stop this factory run?")) onAction(() => api.run(token, snapshot.factory.id, "stop"));
+								}}
 							>
 								Stop
 							</button>
@@ -701,6 +768,7 @@ function Floor({
 					) : (
 						<button
 							className="primary"
+							disabled={busy}
 							onClick={() =>
 								onAction(() =>
 									api.run(
@@ -716,6 +784,14 @@ function Floor({
 					)}
 				</div>
 			</section>
+			{failed && (
+				<div className="error-banner" role="alert">
+					<strong>Runtime error:</strong> {snapshot.run?.last_error}
+					<button type="button" onClick={() => onAction(() => api.run(token, snapshot.factory.id, "resume"))}>
+						Retry
+					</button>
+				</div>
+			)}
 			<section className="metric-grid">
 				<Metric
 					label="Active agents"
@@ -954,11 +1030,20 @@ function DetailPanel({
 	item: Record<string, unknown>;
 	onClose: () => void;
 }) {
+	const closeButton = useRef<HTMLButtonElement>(null);
+	useEffect(() => {
+		closeButton.current?.focus();
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") onClose();
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [onClose]);
 	return (
-		<div className="detail-panel" role="dialog" aria-label="Record details">
+		<div className="detail-panel" role="dialog" aria-modal="true" aria-label="Record details">
 			<div className="panel-heading">
 				<h3>Details</h3>
-				<button className="secondary" onClick={onClose}>
+				<button ref={closeButton} className="secondary" onClick={onClose}>
 					Close
 				</button>
 			</div>

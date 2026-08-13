@@ -418,6 +418,9 @@ class Runtime:
     async def start(self) -> None:
         if self._task and not self._task.done():
             return
+        # Recover before discovery so stale work is repaired even when its
+        # previous run was stopped and therefore is not in the worker query.
+        await self.recover_abandoned_tasks()
         self._stop = asyncio.Event()
         self._task = asyncio.create_task(self._run(), name="factory-runtime")
 
@@ -510,6 +513,28 @@ class Runtime:
             Message.read_at.is_(None),
         ).order_by(Message.created_at).limit(50)))
         for message in messages:
+            recipient = db.scalar(select(Agent).where(
+                Agent.id == message.recipient_agent_id,
+                Agent.factory_id == factory.id,
+            ))
+            if recipient is None:
+                message.status = "failed"
+                message.read_at = now()
+                message.payload = {
+                    **(message.payload if isinstance(message.payload, dict) else {}),
+                    "error": "recipient agent does not belong to message factory",
+                }
+                record_event(
+                    db,
+                    factory.id,
+                    "message_rejected",
+                    {
+                        "message_id": message.id,
+                        "recipient_agent_id": message.recipient_agent_id,
+                        "reason": "cross_factory_recipient",
+                    },
+                )
+                continue
             if message.message_type in {"TASK_REQUEST", "REVIEW_REQUEST"}:
                 payload = message.payload if isinstance(message.payload, dict) else {}
                 task_id = payload.get("task_id")
@@ -552,7 +577,19 @@ class Runtime:
                     db.add(task)
                     db.flush()
                     message.payload = {**payload, "task_id": task.id}
-                    record_event(db, factory.id, "artifact_review_task_created" if message.message_type == "REVIEW_REQUEST" else "task_delegated", {"task_id": task.id, "message_id": message.id})
+                    record_event(
+                        db,
+                        factory.id,
+                        "artifact_review_task_created" if message.message_type == "REVIEW_REQUEST" else "task_delegated",
+                        {
+                            "task_id": task.id,
+                            "message_id": message.id,
+                            "correlation_id": message.correlation_id,
+                            "sender_agent_id": message.sender_agent_id,
+                            "recipient_agent_id": message.recipient_agent_id,
+                            **({"artifact_id": payload.get("artifact_id")} if message.message_type == "REVIEW_REQUEST" else {}),
+                        },
+                    )
             message.status = "read"
             message.delivered_at = message.delivered_at or now()
             message.read_at = now()
@@ -564,11 +601,20 @@ class Runtime:
         tools = []
         for tool in db.scalars(select(Tool).where(Tool.factory_id == factory_id, Tool.enabled.is_(True))):
             if tool.name == "workspace":
-                properties = {"operation": {"type": "string", "enum": ["read", "write"]}, "path": {"type": "string"}, "content": {"type": "string"}}
+                operations = [operation for operation in ("read", "write") if operation in tool.permissions]
+                if not operations:
+                    continue
+                properties = {"operation": {"type": "string", "enum": operations}, "path": {"type": "string"}, "content": {"type": "string"}}
             elif tool.name == "web_fetch":
+                methods = ["GET"] if "GET" in tool.permissions else []
+                if not methods:
+                    continue
                 properties = {"url": {"type": "string"}, "artifact_name": {"type": "string"}}
             else:
-                properties = {"url": {"type": "string"}, "method": {"type": "string"}, "body": {"type": "object"}, "artifact_name": {"type": "string"}}
+                methods = [method for method in ("GET", "POST", "PUT", "DELETE") if method in tool.permissions]
+                if not methods:
+                    continue
+                properties = {"url": {"type": "string"}, "method": {"type": "string", "enum": methods}, "body": {"type": "object"}, "artifact_name": {"type": "string"}}
             tools.append({"type": "function", "function": {"name": tool.name, "description": tool.description, "parameters": {"type": "object", "properties": properties}}})
         tools.extend([
             {"type": "function", "function": {"name": "delegate_task", "description": "Delegate a task to another agent.", "parameters": {"type": "object", "properties": {"agent_id": {"type": "string"}, "title": {"type": "string"}, "description": {"type": "string"}, "goal_id": {"type": "string"}, "inputs": {"type": "object"}}, "required": ["agent_id", "title", "description"]}}},
@@ -587,7 +633,20 @@ class Runtime:
             message = Message(factory_id=factory.id, sender_agent_id=agent.id if agent else None, recipient_agent_id=target.id, message_type="TASK_REQUEST", subject=str(arguments.get("title", "Delegated task"))[:240], body=str(arguments.get("description", "")), payload={"goal_id": arguments.get("goal_id"), "parent_id": task.id, "inputs": arguments.get("inputs", {})}, correlation_id=task.id, status="delivered", delivered_at=now())
             db.add(message)
             db.flush()
-            record_event(db, factory.id, "agent_delegated_task", {"task_id": task.id, "message_id": message.id, "recipient_agent_id": target.id}, actor_type="agent" if agent else "system", actor_id=agent.id if agent else "system")
+            record_event(
+                db,
+                factory.id,
+                "agent_delegated_task",
+                {
+                    "task_id": task.id,
+                    "message_id": message.id,
+                    "correlation_id": message.correlation_id,
+                    "sender_agent_id": agent.id if agent else None,
+                    "recipient_agent_id": target.id,
+                },
+                actor_type="agent" if agent else "system",
+                actor_id=agent.id if agent else "system",
+            )
             return {"message_id": message.id, "recipient_agent_id": target.id}
         if name == "request_review":
             artifact = db.scalar(select(Artifact).where(Artifact.id == arguments.get("artifact_id"), Artifact.factory_id == factory.id))
@@ -597,7 +656,21 @@ class Runtime:
             message = Message(factory_id=factory.id, sender_agent_id=agent.id if agent else None, recipient_agent_id=target.id, message_type="REVIEW_REQUEST", subject="Review artifact", body=str(arguments.get("instructions", "Review the artifact and report findings.")), payload={"artifact_id": artifact.id, "task_id": arguments.get("task_id") or task.id}, correlation_id=task.id, status="delivered", delivered_at=now())
             db.add(message)
             db.flush()
-            record_event(db, factory.id, "artifact_review_requested", {"artifact_id": artifact.id, "message_id": message.id})
+            record_event(
+                db,
+                factory.id,
+                "artifact_review_requested",
+                {
+                    "task_id": task.id,
+                    "artifact_id": artifact.id,
+                    "message_id": message.id,
+                    "correlation_id": message.correlation_id,
+                    "sender_agent_id": agent.id if agent else None,
+                    "recipient_agent_id": target.id,
+                },
+                actor_type="agent" if agent else "system",
+                actor_id=agent.id if agent else "system",
+            )
             return {"message_id": message.id, "artifact_id": artifact.id}
         if name == "reorganize":
             await self.reorganize(factory.id, str(arguments.get("action", "")), agent_id=arguments.get("agent_id") or (agent.id if agent else None), target_agent_id=arguments.get("target_agent_id"), space_id=arguments.get("space_id"))
@@ -656,16 +729,20 @@ class Runtime:
             filename = f"{task.id}.md"
             artifact_content = json.dumps(tool_result, ensure_ascii=False, indent=2) if not isinstance(tool_result.get("content"), str) else tool_result["content"]
             relative = write_workspace_artifact(factory.id, filename, artifact_content)
+            review_artifact_id = task.inputs.get("review_artifact_id")
             artifact = Artifact(
                 factory_id=factory.id,
                 space_id=agent.space_id if agent else None,
                 agent_id=agent.id if agent else None,
                 task_id=task.id,
                 name=filename,
-                kind="text",
+                kind="review" if review_artifact_id else "text",
                 content=artifact_content,
                 uri=f"workspace://{relative}",
-                extra={"tool": task.inputs.get("tool", "llm")},
+                extra={
+                    "tool": task.inputs.get("tool", "llm"),
+                    **({"review_artifact_id": review_artifact_id} if review_artifact_id else {}),
+                },
             )
             db.add(artifact)
             db.flush()

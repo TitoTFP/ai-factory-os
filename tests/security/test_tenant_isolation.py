@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.config import settings
 from app.models import Agent, Artifact, Event, Factory, FactoryCredential, FactoryRun, Goal, Message, Space, Task, Tool, Usage
+from app.services import Runtime
 
 
 def test_register_login_and_factory_isolation(client):
@@ -153,6 +156,40 @@ def test_foreign_tenant_cannot_mutate_any_factory_resource(client, database):
         first_event_types = {event.event_type for event in db.scalars(select(Event).where(Event.factory_id == first_factory))}
         assert "goal_completed_by_user" not in first_event_types
         assert "message_published" not in first_event_types
+    finally:
+        db.close()
+
+
+def test_inbox_rejects_cross_factory_recipient(database):
+    db = SessionLocal()
+    try:
+        first = Factory(owner_id="u1", name="F1", mission="m", primary_objective="o", constraints=[])
+        second = Factory(owner_id="u2", name="F2", mission="m", primary_objective="o", constraints=[])
+        db.add_all([first, second])
+        db.flush()
+        first_space = Space(factory_id=first.id, name="One", purpose="p")
+        second_space = Space(factory_id=second.id, name="Two", purpose="p")
+        db.add_all([first_space, second_space])
+        db.flush()
+        foreign_agent = Agent(factory_id=second.id, space_id=second_space.id, name="Foreign", role="r")
+        db.add(foreign_agent)
+        db.flush()
+        message = Message(
+            factory_id=first.id,
+            recipient_agent_id=foreign_agent.id,
+            message_type="TASK_REQUEST",
+            body="must not cross tenant",
+            status="delivered",
+        )
+        db.add(message)
+        db.commit()
+        asyncio.run(Runtime()._process_inbox(db, first))
+        db.expire_all()
+        rejected = db.get(Message, message.id)
+        assert rejected is not None and rejected.status == "failed"
+        assert db.scalar(select(Task).where(Task.factory_id == first.id)) is None
+        event = db.scalar(select(Event).where(Event.factory_id == first.id, Event.event_type == "message_rejected"))
+        assert event is not None and event.payload["reason"] == "cross_factory_recipient"
     finally:
         db.close()
 

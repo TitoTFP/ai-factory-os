@@ -58,9 +58,20 @@ def test_model_tool_schema_exposes_move_responsibility_and_provider_call(databas
         agent = Agent(factory_id=factory.id, space_id=space.id, name="A", role="r", objective="o", responsibilities=["research"])
         target = Agent(factory_id=factory.id, space_id=space.id, name="B", role="r", objective="o")
         task = Task(factory_id=factory.id, assignee_id=agent.id, title="organize")
-        db.add_all([agent, target, task, FactoryRun(factory_id=factory.id, status="running"), Tool(factory_id=factory.id, name="workspace", enabled=True, permissions=["read"])])
+        db.add_all([
+            agent,
+            target,
+            task,
+            FactoryRun(factory_id=factory.id, status="running"),
+            Tool(factory_id=factory.id, name="workspace", enabled=True, permissions=["read"]),
+            Tool(factory_id=factory.id, name="http", enabled=True, permissions=["GET"]),
+        ])
         db.commit()
         schema = Runtime._agent_tools(db, factory.id)
+        workspace = next(item for item in schema if item["function"]["name"] == "workspace")
+        assert workspace["function"]["parameters"]["properties"]["operation"]["enum"] == ["read"]
+        http_tool = next(item for item in schema if item["function"]["name"] == "http")
+        assert http_tool["function"]["parameters"]["properties"]["method"]["enum"] == ["GET"]
         reorganize = next(item for item in schema if item["function"]["name"] == "reorganize")
         assert "move_responsibility" in reorganize["function"]["parameters"]["properties"]["action"]["enum"]
         result = asyncio.run(Runtime()._model_action(db, factory, agent, task, "reorganize", {"action": "move_responsibility", "agent_id": agent.id, "target_agent_id": target.id}))
