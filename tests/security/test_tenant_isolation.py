@@ -122,18 +122,31 @@ def test_foreign_tenant_cannot_mutate_any_factory_resource(client, database):
     assert client.get(f"/api/factories/{first_factory}", headers=second_headers).status_code == 404
     assert client.get(f"/api/factories/{first_factory}/messages", headers=second_headers).status_code == 404
     assert client.get(f"/api/factories/{first_factory}/usage", headers=second_headers).status_code == 404
+    assert client.post(f"/api/factories/{first_factory}/architect", headers=second_headers).status_code == 404
+    assert client.post(f"/api/factories/{first_factory}/tasks", headers=second_headers, json={"title": "foreign"}).status_code == 404
+    assert client.post(f"/api/factories/{first_factory}/messages", headers=second_headers, json={"message_type": "MESSAGE", "body": "foreign"}).status_code == 404
+    assert client.post(f"/api/factories/{first_factory}/goals/{ids['goal']}/complete", headers=second_headers).status_code == 404
 
     db = SessionLocal()
     try:
-        assert db.get(Agent, ids["agent"]).status == "idle"
-        assert db.get(Goal, ids["goal"]).status == "pending"
-        assert db.get(Task, ids["task"]).status == "queued"
-        assert db.get(Message, ids["message"]).status == "queued"
-        assert db.get(Agent, foreign_ids["agent"]).status == "idle"
-        assert db.get(Goal, foreign_ids["goal"]).status == "pending"
-        assert db.get(Task, foreign_ids["task"]).status == "queued"
-        assert db.scalar(select(Artifact).where(Artifact.factory_id == first_factory)).name == "first"
-        assert db.scalar(select(Artifact).where(Artifact.factory_id == second_factory)).name == "second"
+        first_agent_row = db.get(Agent, ids["agent"])
+        first_goal_row = db.get(Goal, ids["goal"])
+        first_task_row = db.get(Task, ids["task"])
+        first_message_row = db.get(Message, ids["message"])
+        second_agent_row = db.get(Agent, foreign_ids["agent"])
+        second_goal_row = db.get(Goal, foreign_ids["goal"])
+        second_task_row = db.get(Task, foreign_ids["task"])
+        first_artifact_row = db.scalar(select(Artifact).where(Artifact.factory_id == first_factory))
+        second_artifact_row = db.scalar(select(Artifact).where(Artifact.factory_id == second_factory))
+        assert first_agent_row is not None and first_agent_row.status == "idle"
+        assert first_goal_row is not None and first_goal_row.status == "pending"
+        assert first_task_row is not None and first_task_row.status == "queued"
+        assert first_message_row is not None and first_message_row.status == "queued"
+        assert second_agent_row is not None and second_agent_row.status == "idle"
+        assert second_goal_row is not None and second_goal_row.status == "pending"
+        assert second_task_row is not None and second_task_row.status == "queued"
+        assert first_artifact_row is not None and first_artifact_row.name == "first"
+        assert second_artifact_row is not None and second_artifact_row.name == "second"
         first_event_types = {event.event_type for event in db.scalars(select(Event).where(Event.factory_id == first_factory))}
         assert "goal_completed_by_user" not in first_event_types
         assert "message_published" not in first_event_types
