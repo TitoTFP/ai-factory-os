@@ -336,6 +336,7 @@ def start_run(factory_id: str, db: Session = Depends(get_db), user: User = Depen
         db.flush()
     else:
         run.status = "running"
+        run.last_error = ""
         run.started_at = run.started_at or now()
     factory.status = "running"
     record_event(db, factory.id, "factory_started", {"run_id": run.id}, actor_type="user", actor_id=user.id)

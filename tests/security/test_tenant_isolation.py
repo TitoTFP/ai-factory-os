@@ -160,6 +160,27 @@ def test_foreign_tenant_cannot_mutate_any_factory_resource(client, database):
         db.close()
 
 
+def test_resume_clears_stale_runtime_error(client, auth):
+    factory_id = client.post(
+        "/api/factories",
+        headers=auth,
+        json={"name": "Resume", "mission": "m", "primary_objective": "o", "provider_api_key": "secret"},
+    ).json()["id"]
+    started = client.post(f"/api/factories/{factory_id}/run", headers=auth)
+    assert started.status_code == 200
+    db = SessionLocal()
+    try:
+        run = db.scalar(select(FactoryRun).where(FactoryRun.factory_id == factory_id))
+        assert run is not None
+        run.last_error = "stale"
+        db.commit()
+    finally:
+        db.close()
+    resumed = client.post(f"/api/factories/{factory_id}/resume", headers=auth)
+    assert resumed.status_code == 200
+    assert resumed.json()["last_error"] == ""
+
+
 def test_inbox_rejects_cross_factory_recipient(database):
     db = SessionLocal()
     try:

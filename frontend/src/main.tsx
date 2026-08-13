@@ -200,7 +200,14 @@ export function App() {
 			<Onboarding
 				token={token}
 				onCreated={handleCreated}
-				onCancel={factory ? () => setCreatingFactory(false) : undefined}
+				onCancel={
+					factory
+						? () => {
+							setCreatingFactory(false);
+							setDraftFactory(null);
+						}
+						: undefined
+				}
 				error={error}
 				isCreating={Boolean(factory)}
 				draftFactory={draftFactory}
@@ -763,7 +770,9 @@ function Floor({
 								className="secondary"
 								disabled={busy}
 								onClick={() => {
-									if (window.confirm("Stop this factory run?")) onAction(() => api.run(token, snapshot.factory.id, "stop"));
+									if (window.confirm("Stop this factory run?")) {
+										onAction(() => api.run(token, snapshot.factory.id, "stop"));
+									}
 								}}
 							>
 								Stop
@@ -791,7 +800,11 @@ function Floor({
 			{failed && (
 				<div className="error-banner" role="alert">
 					<strong>Runtime error:</strong> {snapshot.run?.last_error}
-					<button type="button" onClick={() => onAction(() => api.run(token, snapshot.factory.id, "resume"))}>
+					<button
+						type="button"
+						disabled={busy}
+						onClick={() => onAction(() => api.run(token, snapshot.factory.id, "resume"))}
+					>
 						Retry
 					</button>
 				</div>
