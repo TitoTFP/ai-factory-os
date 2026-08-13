@@ -56,7 +56,14 @@ OPENAI_MODEL=gpt-4o-mini \
 PYTHONPATH=backend .venv/bin/python scripts/live_provider_smoke.py
 ```
 
-A missing setting exits with code 2; a provider error or unexpected response exits with code 1. Estimated cost telemetry is usage accounting, not billing.
+A missing setting exits with code 2; a provider error or unexpected response exits with code 1. For the configured-provider Architect/agent E2E (not a mocked provider), run:
+
+```bash
+OPENAI_API_KEY=... OPENAI_BASE_URL=... OPENAI_MODEL=... \
+PYTHONPATH=backend .venv/bin/python -m pytest -m live tests/e2e/test_live_provider.py -q
+```
+
+Estimated cost telemetry is usage accounting, not billing.
 
 OAuth uses `/api/auth/oauth/start` to issue a short-lived state and provider authorization URL, then verifies the returned authorization code server-side before creating a session. Configure `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`.
 

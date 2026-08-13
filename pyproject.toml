@@ -22,6 +22,9 @@ factory-api = "app.main:run"
 pythonpath = ["backend"]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "live: requires OPENAI_API_KEY, OPENAI_BASE_URL, and OPENAI_MODEL",
+]
 
 [tool.setuptools.packages.find]
 where = ["backend"]
