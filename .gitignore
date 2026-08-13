@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.db
+.data/
+data/
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+.codegraph/
+.pi/
+.pi-glla/
+.llm-wiki/
+.pytest_cache/
+.env
+.env.*
+!.env.example

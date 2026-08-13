@@ -1,0 +1,839 @@
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { api, type Factory, type Snapshot } from "./api";
+import "./styles.css";
+
+type Screen =
+	| "floor"
+	| "spaces"
+	| "agents"
+	| "goals"
+	| "tasks"
+	| "messages"
+	| "artifacts"
+	| "activity";
+
+const nav: Array<{ id: Screen; label: string; icon: string }> = [
+	{ id: "floor", label: "Factory Floor", icon: "⌘" },
+	{ id: "spaces", label: "Spaces", icon: "▦" },
+	{ id: "agents", label: "Agents", icon: "◎" },
+	{ id: "goals", label: "Goals", icon: "◈" },
+	{ id: "tasks", label: "Tasks", icon: "✓" },
+	{ id: "messages", label: "Messages", icon: "↗" },
+	{ id: "artifacts", label: "Artifacts", icon: "▤" },
+	{ id: "activity", label: "Activity", icon: "≡" },
+];
+
+function initialToken(): string {
+	const hash = new URLSearchParams(window.location.hash.slice(1));
+	const token = hash.get("access_token");
+	if (token) {
+		localStorage.setItem("factory_token", token);
+		window.history.replaceState({}, document.title, window.location.pathname);
+		return token;
+	}
+	return localStorage.getItem("factory_token") ?? "";
+}
+
+function App() {
+	const [token, setToken] = useState(initialToken);
+	const [factory, setFactory] = useState<Factory | null>(null);
+	const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+	const [screen, setScreen] = useState<Screen>("floor");
+	const [error, setError] = useState("");
+	const [connection, setConnection] = useState<
+		"connecting" | "live" | "offline"
+	>("connecting");
+	const [selected, setSelected] = useState<Record<string, unknown> | null>(
+		null,
+	);
+
+	const loadFactories = async (authToken = token) => {
+		const factories = await api.factories(authToken);
+		if (factories[0]) {
+			setFactory(factories[0]);
+			setSnapshot(await api.snapshot(authToken, factories[0].id));
+		}
+	};
+
+	const handleLoadError = (errorValue: Error) => {
+		if (!localStorage.getItem("factory_token")) {
+			setToken("");
+			setFactory(null);
+			setSnapshot(null);
+		} else {
+			setError(errorValue.message);
+		}
+	};
+
+	useEffect(() => {
+		if (!token) return;
+		loadFactories().catch(handleLoadError);
+	}, [token]);
+
+	useEffect(() => {
+		if (!token || !factory) return;
+		const socket = new WebSocket(api.eventsUrl(token, factory.id));
+		setConnection("connecting");
+		socket.onopen = () => setConnection("live");
+		socket.onmessage = () => loadFactories(token).catch(handleLoadError);
+		socket.onerror = () => setConnection("offline");
+		socket.onclose = () => setConnection("offline");
+		return () => socket.close();
+	}, [token, factory?.id]);
+
+	if (!token)
+		return (
+			<Auth
+				onAuth={(value) => {
+					localStorage.setItem("factory_token", value);
+					setToken(value);
+				}}
+			/>
+		);
+	if (!factory)
+		return (
+			<Onboarding
+				token={token}
+				onCreated={(value) => {
+					setFactory(value);
+					api
+						.snapshot(token, value.id)
+						.then(setSnapshot)
+						.catch((e: Error) => setError(e.message));
+				}}
+				error={error}
+			/>
+		);
+
+	const refresh = () =>
+		api
+			.snapshot(token, factory.id)
+			.then(setSnapshot)
+			.catch((e: Error) => setError(e.message));
+	const invoke = async (action: () => Promise<unknown>) => {
+		setError("");
+		try {
+			await action();
+			await refresh();
+		} catch (e) {
+			setError((e as Error).message);
+		}
+	};
+	return (
+		<div className="app-shell">
+			<aside className="sidebar">
+				<div className="brand">
+					<span className="brand-mark">✦</span>
+					<span>
+						FACTORY<span className="muted">OS</span>
+					</span>
+				</div>
+				<div className="factory-switcher">
+					<span className="pulse" /> <span>{factory.name}</span>
+					<span className="chevron">⌄</span>
+				</div>
+				<nav>
+					{nav.map((item) => (
+						<button
+							className={screen === item.id ? "nav-item active" : "nav-item"}
+							aria-label={item.label}
+							key={item.id}
+							onClick={() => setScreen(item.id)}
+						>
+							<span className="nav-icon">{item.icon}</span>
+							{item.label}
+							{item.id === "messages" && snapshot?.messages.length ? (
+								<span className="nav-count">{snapshot.messages.length}</span>
+							) : null}
+						</button>
+					))}
+				</nav>
+				<div className="sidebar-bottom">
+					<div className="live-indicator">
+						<span className="pulse" /> Runtime {connection}
+					</div>
+					<button
+						className="logout"
+						onClick={() => {
+							localStorage.removeItem("factory_token");
+							setToken("");
+						}}
+					>
+						Sign out
+					</button>
+				</div>
+			</aside>
+			<main className="main-content">
+				<header className="topbar">
+					<div>
+						<div className="eyebrow">
+							OPERATING SYSTEM / {screen.toUpperCase()}
+						</div>
+						<h1>
+							{screen === "floor"
+								? "Factory Floor"
+								: nav.find((x) => x.id === screen)?.label}
+						</h1>
+					</div>
+					<div className="top-actions">
+						<span className={`connection ${connection}`}>
+							<span className="pulse" />{" "}
+							{connection === "live" ? "Live" : connection}
+						</span>
+						<button className="avatar">
+							{factory.name.slice(0, 1).toUpperCase()}
+						</button>
+					</div>
+				</header>
+				{error && (
+					<div className="error-banner" role="alert" aria-live="polite">
+						{error}
+						<button aria-label="Dismiss error" onClick={() => setError("")}>
+							×
+						</button>
+					</div>
+				)}
+				{screen === "floor" ? (
+					<Floor snapshot={snapshot} onAction={invoke} onSelect={setSelected} />
+				) : (
+					<Collection
+						screen={screen}
+						snapshot={snapshot}
+						onSelect={setSelected}
+					/>
+				)}
+				{selected && (
+					<DetailPanel item={selected} onClose={() => setSelected(null)} />
+				)}
+			</main>
+		</div>
+	);
+}
+
+function Auth({ onAuth }: { onAuth: (token: string) => void }) {
+	const [mode, setMode] = useState<"login" | "register">("register");
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
+	const [name, setName] = useState("");
+	const [error, setError] = useState("");
+	const submit = async (event: React.FormEvent) => {
+		event.preventDefault();
+		try {
+			const result =
+				mode === "register"
+					? await api.register({ email, password, name })
+					: await api.login({ email, password });
+			onAuth(result.access_token);
+		} catch (e) {
+			setError((e as Error).message);
+		}
+	};
+	const oauth = async (provider: "github" | "google") => {
+		try {
+			const result = await api.oauthStart(provider);
+			const url = new URL(result.authorization_url);
+			if (!["github.com", "accounts.google.com"].includes(url.hostname))
+				throw new Error("OAuth provider URL is not allowed");
+			window.location.assign(url.href);
+		} catch (e) {
+			setError((e as Error).message);
+		}
+	};
+	return (
+		<div className="auth-page">
+			<div className="auth-card">
+				<div className="brand large">
+					<span className="brand-mark">✦</span>
+					<span>
+						FACTORY<span className="muted">OS</span>
+					</span>
+				</div>
+				<p className="kicker">A WORKSPACE FOR AUTONOMOUS TEAMS</p>
+				<h1>{mode === "register" ? "Create your account" : "Welcome back"}</h1>
+				<p className="subtle">
+					Build a living factory around the work that matters.
+				</p>
+				<div className="oauth-row">
+					<button className="secondary" onClick={() => oauth("github")}>
+						GitHub
+					</button>
+					<button className="secondary" onClick={() => oauth("google")}>
+						Google
+					</button>
+				</div>
+				<div className="or">
+					<span>or use email</span>
+				</div>
+				<form onSubmit={submit}>
+					{mode === "register" && (
+						<label>
+							Your name
+							<input
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								placeholder="Alex Morgan"
+								required
+							/>
+						</label>
+					)}
+					<label>
+						Email
+						<input
+							type="email"
+							value={email}
+							onChange={(e) => setEmail(e.target.value)}
+							placeholder="you@company.com"
+							required
+						/>
+					</label>
+					<label>
+						Password
+						<input
+							type="password"
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							placeholder="At least 8 characters"
+							minLength={8}
+							required
+						/>
+					</label>
+					{error && (
+						<p className="form-error" role="alert">
+							{error}
+						</p>
+					)}
+					<button className="primary full" type="submit">
+						{mode === "register" ? "Enter the factory" : "Sign in"}{" "}
+						<span>→</span>
+					</button>
+				</form>
+				<button
+					className="switch-auth"
+					onClick={() => setMode(mode === "register" ? "login" : "register")}
+				>
+					{mode === "register"
+						? "Already have an account? Sign in"
+						: "New here? Create an account"}
+				</button>
+			</div>
+		</div>
+	);
+}
+
+function Onboarding({
+	token,
+	onCreated,
+	error,
+}: {
+	token: string;
+	onCreated: (factory: Factory) => void;
+	error: string;
+}) {
+	const [form, setForm] = useState({
+		name: "",
+		mission: "",
+		primary_objective: "",
+		constraints: "",
+		autonomy: "mostly_autonomous",
+		tool_permissions: ["workspace", "web_fetch", "http"],
+		provider_api_key: "",
+		provider_base_url: "https://api.openai.com/v1",
+		provider_model: "gpt-4o-mini",
+	});
+	const [busy, setBusy] = useState(false);
+	const [localError, setLocalError] = useState("");
+	const submit = async (event: React.FormEvent) => {
+		event.preventDefault();
+		setBusy(true);
+		setLocalError("");
+		try {
+			const created = await api.createFactory(token, {
+				...form,
+				constraints: form.constraints
+					.split("\n")
+					.map((x) => x.trim())
+					.filter(Boolean),
+			});
+			await api.architect(token, created.id);
+			onCreated(created);
+		} catch (e) {
+			setLocalError((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
+	};
+	return (
+		<div className="onboarding">
+			<div className="onboard-copy">
+				<div className="eyebrow">FIRST RUN / FACTORY ARCHITECT</div>
+				<h1>
+					Give your factory
+					<br />
+					<em>a reason to exist.</em>
+				</h1>
+				<p>
+					Define the mission. The Architect will shape the spaces, people, and
+					goals that make it real.
+				</p>
+				<div className="onboard-steps">
+					<span className="done">01 Mission</span>
+					<span>02 Architecture</span>
+					<span>03 Launch</span>
+				</div>
+			</div>
+			<form className="onboard-form" onSubmit={submit}>
+				<div className="form-heading">
+					<span className="step-badge">01</span>
+					<div>
+						<h2>Factory brief</h2>
+						<p>Start with the signal. Refine the system later.</p>
+					</div>
+				</div>
+				<label>
+					Factory name
+					<input
+						value={form.name}
+						onChange={(e) => setForm({ ...form, name: e.target.value })}
+						placeholder="e.g. MemeForge"
+						required
+					/>
+				</label>
+				<label>
+					What does this factory do?
+					<textarea
+						value={form.mission}
+						onChange={(e) => setForm({ ...form, mission: e.target.value })}
+						placeholder="Describe the mission in one or two sentences."
+						required
+					/>
+				</label>
+				<label>
+					Primary objective
+					<textarea
+						value={form.primary_objective}
+						onChange={(e) =>
+							setForm({ ...form, primary_objective: e.target.value })
+						}
+						placeholder="What measurable outcome should the factory pursue?"
+						required
+					/>
+				</label>
+				<label>
+					Autonomy
+					<select
+						value={form.autonomy}
+						onChange={(e) => setForm({ ...form, autonomy: e.target.value })}
+					>
+						<option value="mostly_autonomous">Mostly autonomous</option>
+						<option value="fully_autonomous">Fully autonomous</option>
+						<option value="supervised">Supervised</option>
+					</select>
+				</label>
+				<label>
+					Tool scope
+					<div className="scope-grid">
+						{["workspace", "web_fetch", "http"].map((tool) => (
+							<label key={tool}>
+								<input
+									type="checkbox"
+									checked={form.tool_permissions.includes(tool)}
+									onChange={(e) =>
+										setForm({
+											...form,
+											tool_permissions: e.target.checked
+												? [...form.tool_permissions, tool]
+												: form.tool_permissions.filter(
+														(value) => value !== tool,
+													),
+										})
+									}
+								/>{" "}
+								{tool}
+							</label>
+						))}
+					</div>
+				</label>
+				<label>
+					Constraints <span className="label-hint">one per line</span>
+					<textarea
+						value={form.constraints}
+						onChange={(e) => setForm({ ...form, constraints: e.target.value })}
+						placeholder="Budget, market, principles…"
+					/>
+				</label>
+				<div className="form-divider" />
+				<div className="form-heading compact">
+					<span className="step-badge">AI</span>
+					<div>
+						<h2>Connect your model</h2>
+						<p>OpenAI-compatible endpoint for the Architect.</p>
+					</div>
+				</div>
+				<label>
+					API key
+					<input
+						type="password"
+						value={form.provider_api_key}
+						onChange={(e) =>
+							setForm({ ...form, provider_api_key: e.target.value })
+						}
+						placeholder="sk-…"
+						required
+					/>
+				</label>
+				<div className="two-col">
+					<label>
+						Base URL
+						<input
+							value={form.provider_base_url}
+							onChange={(e) =>
+								setForm({ ...form, provider_base_url: e.target.value })
+							}
+						/>
+					</label>
+					<label>
+						Model
+						<input
+							value={form.provider_model}
+							onChange={(e) =>
+								setForm({ ...form, provider_model: e.target.value })
+							}
+						/>
+					</label>
+				</div>
+				{(error || localError) && (
+					<p className="form-error" role="alert">
+						{error || localError}
+					</p>
+				)}
+				<button className="primary full" disabled={busy}>
+					{busy ? "Creating architecture…" : "Create factory architecture"}{" "}
+					<span>→</span>
+				</button>
+			</form>
+		</div>
+	);
+}
+
+function Floor({
+	snapshot,
+	onAction,
+	onSelect,
+}: {
+	snapshot: Snapshot | null;
+	onAction: (action: () => Promise<unknown>) => void;
+	onSelect: (item: Record<string, unknown>) => void;
+}) {
+	if (!snapshot) return <div className="loading">Loading factory state…</div>;
+	const running = snapshot.run?.status === "running";
+	const paused = snapshot.run?.status === "paused";
+	const token = localStorage.getItem("factory_token") ?? "";
+	return (
+		<div className="content-wrap">
+			<section className="hero-row">
+				<div>
+					<div className="eyebrow">MISSION CONTROL / OVERVIEW</div>
+					<h2>{snapshot.factory.mission}</h2>
+					<p className="subtle max-copy">
+						{snapshot.factory.primary_objective}
+					</p>
+				</div>
+				<div className="run-controls">
+					<span className={`status-pill ${running ? "working" : ""}`}>
+						<span className="pulse" />{" "}
+						{running ? "Running" : snapshot.factory.status}
+					</span>
+					{running ? (
+						<>
+							<button
+								className="secondary"
+								onClick={() =>
+									onAction(() => api.run(token, snapshot.factory.id, "pause"))
+								}
+							>
+								Pause
+							</button>
+							<button
+								className="secondary"
+								onClick={() =>
+									onAction(() => api.run(token, snapshot.factory.id, "stop"))
+								}
+							>
+								Stop
+							</button>
+						</>
+					) : (
+						<button
+							className="primary"
+							onClick={() =>
+								onAction(() =>
+									api.run(
+										token,
+										snapshot.factory.id,
+										paused ? "resume" : "run",
+									),
+								)
+							}
+						>
+							{paused ? "Resume factory" : "Start factory"} <span>→</span>
+						</button>
+					)}
+				</div>
+			</section>
+			<section className="metric-grid">
+				<Metric
+					label="Active agents"
+					value={snapshot.agents.filter((x) => x.status === "working").length}
+					detail={`${snapshot.agents.length} total`}
+				/>
+				<Metric
+					label="Open tasks"
+					value={snapshot.tasks.filter((x) => x.status !== "done").length}
+					detail={`${snapshot.tasks.filter((x) => x.status === "done").length} completed`}
+				/>
+				<Metric
+					label="Artifacts"
+					value={snapshot.artifacts.length}
+					detail="Across all spaces"
+				/>
+				<Metric
+					label="Events"
+					value={snapshot.events.length}
+					detail="Audited activity"
+				/>
+				<Metric
+					label="Estimated cost"
+					value={snapshot.usage.cost_usd}
+					detail={`${snapshot.usage.total_tokens} tokens / ${snapshot.usage.requests} requests`}
+				/>
+			</section>
+			<div className="floor-grid">
+				<section className="panel floor-map">
+					<div className="panel-heading">
+						<div>
+							<span className="eyebrow">SPACES / LIVE MAP</span>
+							<h3>Factory floor</h3>
+						</div>
+						<span className="live-label">
+							<span className="pulse" /> live
+						</span>
+					</div>
+					<div className="space-list">
+						{snapshot.spaces.map((space, index) => (
+							<button
+								type="button"
+								className="space-card"
+								key={space.id}
+								onClick={() =>
+									onSelect(space as unknown as Record<string, unknown>)
+								}
+							>
+								<div className={`space-orb orb-${index % 4}`}>
+									<span>{space.name.slice(0, 1)}</span>
+								</div>
+								<div className="space-info">
+									<div className="space-title">
+										<strong>{space.name}</strong>
+										<span>
+											{
+												snapshot.agents.filter((a) => a.space_id === space.id)
+													.length
+											}{" "}
+											agents
+										</span>
+									</div>
+									<p>{space.purpose}</p>
+									<div className="agent-dots">
+										{snapshot.agents
+											.filter((a) => a.space_id === space.id)
+											.map((agent) => (
+												<span
+													className={`agent-chip ${agent.status}`}
+													key={agent.id}
+												>
+													<i />
+													{agent.name}
+												</span>
+											))}
+									</div>
+								</div>
+								<span className="space-arrow">↗</span>
+							</button>
+						))}
+					</div>
+				</section>
+				<section className="panel activity-panel">
+					<div className="panel-heading">
+						<div>
+							<span className="eyebrow">EVENT STREAM</span>
+							<h3>Recent activity</h3>
+						</div>
+						<span className="view-all">View all →</span>
+					</div>
+					<div className="event-list">
+						{snapshot.events.slice(0, 7).map((event) => (
+							<div className="event-row" key={event.id}>
+								<div className="event-icon">
+									{event.event_type === "tool_called"
+										? "↗"
+										: event.event_type.includes("task")
+											? "✓"
+											: "✦"}
+								</div>
+								<div>
+									<strong>{event.event_type.replaceAll("_", " ")}</strong>
+									<p>{JSON.stringify(event.payload)}</p>
+								</div>
+								<time>{event.event_type}</time>
+							</div>
+						))}
+					</div>
+				</section>
+			</div>
+			<section className="panel goal-panel">
+				<div className="panel-heading">
+					<div>
+						<span className="eyebrow">GOALS / PROGRESS</span>
+						<h3>Factory objectives</h3>
+					</div>
+				</div>
+				{snapshot.goals.map((goal) => (
+					<div className="goal-row" key={goal.id}>
+						<div className="goal-check">
+							{goal.status === "completed" ? "✓" : "○"}
+						</div>
+						<div className="goal-copy">
+							<strong>{goal.title}</strong>
+							<p>{goal.objective}</p>
+						</div>
+						<span className={`status-text ${goal.status}`}>{goal.status}</span>
+					</div>
+				))}
+			</section>
+		</div>
+	);
+}
+
+function Metric({
+	label,
+	value,
+	detail,
+}: {
+	label: string;
+	value: number;
+	detail: string;
+}) {
+	return (
+		<div className="metric">
+			<span>{label}</span>
+			<strong>{value}</strong>
+			<small>{detail}</small>
+		</div>
+	);
+}
+
+function Collection({
+	screen,
+	snapshot,
+	onSelect,
+}: {
+	screen: Screen;
+	snapshot: Snapshot | null;
+	onSelect: (item: Record<string, unknown>) => void;
+}) {
+	if (!snapshot) return <div className="loading">Loading…</div>;
+	const data =
+		screen === "spaces"
+			? snapshot.spaces
+			: screen === "agents"
+				? snapshot.agents
+				: screen === "goals"
+					? snapshot.goals
+					: screen === "tasks"
+						? snapshot.tasks
+						: screen === "messages"
+							? snapshot.messages
+							: screen === "artifacts"
+								? snapshot.artifacts
+								: snapshot.events;
+	return (
+		<div className="content-wrap collection">
+			<div className="collection-intro">
+				<div>
+					<div className="eyebrow">FACTORY DATA / {screen.toUpperCase()}</div>
+					<h2>{nav.find((x) => x.id === screen)?.label}</h2>
+					<p className="subtle">
+						Everything produced, decided, and in motion inside this factory.
+					</p>
+				</div>
+				<span className="count-badge">{data.length} records</span>
+			</div>
+			<div className="collection-grid">
+				{data.map((item) => (
+					<button
+						type="button"
+						className="data-card"
+						key={item.id}
+						onClick={() => onSelect(item as unknown as Record<string, unknown>)}
+					>
+						<div className="card-top">
+							<span className="type-tag">{screen.slice(0, -1)}</span>
+							<span className="status-text">
+								{"status" in item ? String(item.status) : "logged"}
+							</span>
+						</div>
+						<h3>
+							{"name" in item
+								? String(item.name)
+								: "title" in item
+									? String(item.title)
+									: "event_type" in item
+										? String(item.event_type).replaceAll("_", " ")
+										: String(item.subject ?? "Message")}
+						</h3>
+						<p>
+							{"purpose" in item
+								? item.purpose
+								: "objective" in item
+									? item.objective
+									: "body" in item
+										? item.body
+										: "payload" in item
+											? JSON.stringify(item.payload)
+											: "content" in item
+												? item.content.slice(0, 180)
+												: JSON.stringify(item)}
+						</p>
+					</button>
+				))}
+			</div>
+		</div>
+	);
+}
+
+function DetailPanel({
+	item,
+	onClose,
+}: {
+	item: Record<string, unknown>;
+	onClose: () => void;
+}) {
+	return (
+		<div className="detail-panel" role="dialog" aria-label="Record details">
+			<div className="panel-heading">
+				<h3>Details</h3>
+				<button className="secondary" onClick={onClose}>
+					Close
+				</button>
+			</div>
+			<pre>{JSON.stringify(item, null, 2)}</pre>
+		</div>
+	);
+}
+
+createRoot(document.getElementById("root")!).render(
+	<React.StrictMode>
+		<App />
+	</React.StrictMode>,
+);

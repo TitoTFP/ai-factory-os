@@ -1,0 +1,15 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": ["backend", ".venv/lib/python3.14/site-packages", "frontend/node_modules"],
+  "include": ["backend", "tests", "alembic", "scripts"],
+  "ignore": ["alembic/versions"],
+  "executionEnvironments": [
+    {"root": "backend", "extraPaths": ["backend", ".venv/lib/python3.14/site-packages"]},
+    {"root": "tests", "extraPaths": ["backend", ".", ".venv/lib/python3.14/site-packages"]},
+    {"root": "scripts", "extraPaths": ["backend", ".venv/lib/python3.14/site-packages"]},
+    {"root": "alembic", "extraPaths": ["backend", ".venv/lib/python3.14/site-packages"]}
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "error"
+}
