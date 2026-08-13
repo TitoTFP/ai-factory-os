@@ -71,6 +71,14 @@ For production, `ENVIRONMENT=production` requires a 32+ character `SECRET_KEY` a
 
 ## Checks
 
+Use the environment probe before attempting the external gates:
+
+```bash
+PYTHONPATH=backend .venv/bin/python scripts/verify_environment.py
+```
+
+Then run the deterministic checks:
+
 ```bash
 .venv/bin/python -m pytest -q
 cd frontend && npm test -- --run && npm run build
