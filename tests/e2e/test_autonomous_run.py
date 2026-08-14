@@ -207,6 +207,98 @@ def test_provider_issued_reorganization_call_is_applied(database, monkeypatch):
         db.close()
 
 
+def test_provider_tool_artifact_message_review_and_restart_round_trip(database, monkeypatch):
+    db = SessionLocal()
+    try:
+        factory = Factory(owner_id="owner", name="Tool Round Trip", mission="m", primary_objective="o", constraints=[])
+        db.add(factory)
+        db.flush()
+        space = Space(factory_id=factory.id, name="Work", purpose="Execute and review work")
+        db.add(space)
+        db.flush()
+        builder = Agent(factory_id=factory.id, space_id=space.id, name="Builder", role="Builder", objective="o")
+        reviewer = Agent(factory_id=factory.id, space_id=space.id, name="Reviewer", role="Reviewer", objective="o")
+        db.add_all([builder, reviewer])
+        db.flush()
+        task = Task(
+            factory_id=factory.id,
+            assignee_id=builder.id,
+            title="Create evidence",
+            description="Use the workspace tool",
+            inputs={"reply_to_agent_id": reviewer.id},
+        )
+        db.add_all([
+            task,
+            Tool(factory_id=factory.id, name="workspace", enabled=True, permissions=["read", "write"]),
+            FactoryRun(factory_id=factory.id, status="running"),
+        ])
+        db.commit()
+
+        class SequencedProvider:
+            config = type("Config", (), {"model": "test-model"})()
+
+            def __init__(self):
+                self.responses = [
+                    ProviderResponse(
+                        "",
+                        total_tokens=5,
+                        tool_calls=(ToolCall("call-1", "workspace", {"operation": "write", "path": "evidence.md", "content": "provider evidence"}),),
+                    ),
+                    ProviderResponse("review passed", total_tokens=3),
+                ]
+                self.last_response = self.responses[0]
+
+            async def chat(self, messages, *, json_mode=False, tools=None):
+                self.last_response = self.responses.pop(0)
+                return self.last_response.content
+
+        provider = SequencedProvider()
+        monkeypatch.setattr("app.services.provider_for", lambda _db, _factory_id: provider)
+        runtime = Runtime()
+
+        # The provider's function call executes the real workspace tool and emits
+        # both tool evidence and the typed result message.
+        asyncio.run(runtime.process_factory(factory.id))
+        db.expire_all()
+        completed = db.get(Task, task.id)
+        tool_artifact = db.scalar(select(Artifact).where(Artifact.factory_id == factory.id, Artifact.name == "evidence.md"))
+        result_message = db.scalar(select(Message).where(Message.factory_id == factory.id, Message.message_type == "TASK_RESULT"))
+        assert completed is not None and completed.status == "done"
+        assert tool_artifact is not None and tool_artifact.kind == "file" and tool_artifact.content == "provider evidence"
+        assert result_message is not None and result_message.recipient_agent_id == reviewer.id
+        assert db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "tool_called")) is not None
+
+        # A typed review request becomes a durable review task through the inbox.
+        asyncio.run(runtime._model_action(db, factory, builder, task, "request_review", {
+            "agent_id": reviewer.id,
+            "artifact_id": tool_artifact.id,
+            "instructions": "Check the provider evidence",
+        }))
+        asyncio.run(runtime._process_inbox(db, factory))
+        review_task = next(
+            candidate
+            for candidate in db.scalars(select(Task).where(Task.factory_id == factory.id))
+            if candidate.inputs.get("review_artifact_id") == tool_artifact.id
+        )
+        assert review_task.inputs["reply_to_agent_id"] == builder.id
+
+        # Simulate a process restart after the review worker acquired a stale lease.
+        review_task.status = "running"
+        review_task.lease_until = utc_now() - timedelta(seconds=10)
+        db.commit()
+        asyncio.run(runtime.process_factory(factory.id))
+        db.expire_all()
+        completed_review = db.get(Task, review_task.id)
+        review_result = db.scalar(select(Message).where(Message.factory_id == factory.id, Message.message_type == "REVIEW_RESULT"))
+        review_artifact = db.scalar(select(Artifact).where(Artifact.factory_id == factory.id, Artifact.task_id == review_task.id))
+        assert completed_review is not None and completed_review.status == "done"
+        assert review_result is not None and review_result.recipient_agent_id == builder.id
+        assert review_artifact is not None and review_artifact.kind == "review" and review_artifact.extra["review_artifact_id"] == tool_artifact.id
+        assert db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "task_recovered")) is not None
+    finally:
+        db.close()
+
+
 def test_terminal_failure_escalates_and_retries(database):
     db = SessionLocal()
     try:
