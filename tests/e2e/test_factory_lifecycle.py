@@ -82,6 +82,17 @@ def test_workspace_boundary_and_tool_audit(database):
         asyncio.run(execute_tool(db, factory, agent, None, "workspace", {"operation": "write", "path": "notes.md", "content": "hello"}))
         other_directory = asyncio.run(execute_tool(db, factory, other_agent, None, "workspace", {"operation": "read", "path": "."}))
         assert other_directory["entries"] == []
+        agent_root = safe_workspace_path(factory.id, ".", agent.id)
+        other_root = safe_workspace_path(factory.id, ".", other_agent.id)
+        link = agent_root / "other-agent"
+        link.symlink_to(other_root, target_is_directory=True)
+        try:
+            safe_workspace_path(factory.id, "other-agent/notes.md", agent.id)
+            assert False, "symlinked agent workspace path should be rejected"
+        except ValueError:
+            pass
+        finally:
+            link.unlink()
         try:
             safe_workspace_path(factory.id, f"../{agent.id}/notes.md", other_agent.id)
             assert False, "agent workspace path should not cross into another agent"

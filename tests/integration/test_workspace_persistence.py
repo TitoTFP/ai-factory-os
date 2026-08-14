@@ -34,27 +34,28 @@ def test_workspace_survives_api_container_recreation_and_stays_agent_private():
     factory_id = f"container-recreation-{uuid.uuid4().hex}"
     agent_a = "agent-a"
     agent_b = "agent-b"
-    first = _compose_python(
-        "from app.services import safe_workspace_path, write_workspace_artifact; "
-        f"write_workspace_artifact({factory_id!r}, 'persisted.txt', 'survives recreation', {agent_a!r}); "
-        f"safe_workspace_path({factory_id!r}, '../{agent_a}/persisted.txt', {agent_b!r})"
-    )
-    assert first.returncode != 0
-    assert "agent boundary" in first.stderr
+    try:
+        first = _compose_python(
+            "from app.services import safe_workspace_path, write_workspace_artifact; "
+            f"write_workspace_artifact({factory_id!r}, 'persisted.txt', 'survives recreation', {agent_a!r}); "
+            f"safe_workspace_path({factory_id!r}, '../{agent_a}/persisted.txt', {agent_b!r})"
+        )
+        assert first.returncode != 0
+        assert "agent boundary" in first.stderr
 
-    second = _compose_python(
-        "from app.services import safe_workspace_path; "
-        f"path = safe_workspace_path({factory_id!r}, 'persisted.txt', {agent_a!r}); "
-        "assert path.read_text(encoding='utf-8') == 'survives recreation'; "
-        f"other = safe_workspace_path({factory_id!r}, '.', {agent_b!r}); "
-        "assert not (other / 'persisted.txt').exists(); "
-        f"safe_workspace_path({factory_id!r}, '../{agent_a}/persisted.txt', {agent_b!r})"
-    )
-    assert second.returncode != 0
-    assert "agent boundary" in second.stderr
-
-    cleanup = _compose_python(
-        "import shutil; from pathlib import Path; "
-        f"shutil.rmtree(Path('/app/data/factories') / {factory_id!r}, ignore_errors=True)"
-    )
-    assert cleanup.returncode == 0, cleanup.stderr
+        second = _compose_python(
+            "from app.services import safe_workspace_path; "
+            f"path = safe_workspace_path({factory_id!r}, 'persisted.txt', {agent_a!r}); "
+            "assert path.read_text(encoding='utf-8') == 'survives recreation'; "
+            f"other = safe_workspace_path({factory_id!r}, '.', {agent_b!r}); "
+            "assert not (other / 'persisted.txt').exists(); "
+            f"safe_workspace_path({factory_id!r}, '../{agent_a}/persisted.txt', {agent_b!r})"
+        )
+        assert second.returncode != 0
+        assert "agent boundary" in second.stderr
+    finally:
+        cleanup = _compose_python(
+            "import shutil; from pathlib import Path; "
+            f"shutil.rmtree(Path('/app/data/factories') / {factory_id!r}, ignore_errors=True)"
+        )
+        assert cleanup.returncode == 0, cleanup.stderr

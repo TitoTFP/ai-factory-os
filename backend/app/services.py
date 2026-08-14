@@ -261,12 +261,27 @@ async def architect_factory(db: Session, factory: Factory) -> dict[str, list[Any
 
 
 def _workspace_scope(factory_id: str, agent_id: str | None = None) -> Path:
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", factory_id):
+        raise ValueError("invalid factory workspace identifier")
+    scope_name = agent_id or "_system"
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", scope_name):
+        raise ValueError("invalid agent workspace identifier")
+
     base = WORKSPACE_ROOT.resolve()
-    factory_root = (base / factory_id).resolve()
+    factory_path = WORKSPACE_ROOT / factory_id
+    if factory_path.is_symlink():
+        raise ValueError("factory workspace cannot be a symlink")
+    factory_root = factory_path.resolve()
     if factory_root != base and base not in factory_root.parents:
         raise ValueError("workspace path escapes workspace boundary")
-    scope_name = agent_id or "_system"
-    agent_root = (factory_root / "agents" / scope_name).resolve()
+
+    agents_path = factory_path / "agents"
+    if agents_path.is_symlink():
+        raise ValueError("agent workspace directory cannot be a symlink")
+    agent_path = agents_path / scope_name
+    if agent_path.is_symlink():
+        raise ValueError("agent workspace cannot be a symlink")
+    agent_root = agent_path.resolve()
     if factory_root not in agent_root.parents:
         raise ValueError("workspace path escapes factory boundary")
     return agent_root
