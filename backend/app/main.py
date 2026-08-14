@@ -130,9 +130,13 @@ def _snapshot(db: Session, factory: Factory) -> FactorySnapshot:
     usage = _usage_response(db, factory)
     recent_events = list(db.scalars(where(Event).order_by(Event.created_at.desc(), Event.id.desc()).limit(200)))
     lifecycle_events = list(db.scalars(
-        where(Event).where(Event.event_type.like("improvement_cycle_%"))
+        where(Event).where(or_(
+            Event.event_type.like("improvement_cycle_%"),
+            Event.event_type.like("repository_%"),
+            Event.event_type.like("github_%"),
+        ))
         .order_by(Event.created_at.desc(), Event.id.desc())
-        .limit(200)
+        .limit(500)
     ))
     event_by_id = {event.id: event for event in [*recent_events, *lifecycle_events]}
     events = sorted(event_by_id.values(), key=lambda event: (event.created_at, event.id), reverse=True)

@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -247,8 +248,8 @@ def git_commit(worktree: str | Path, message: str) -> str:
     message = " ".join(str(message or "").split())[:240]
     if not message:
         raise RepositoryError("commit message is required")
-    _run_git(["config", "user.name", "Factory Zero"], cwd=root)
-    _run_git(["config", "user.email", "factory-zero@users.noreply.github.com"], cwd=root)
+    # Git identity is intentionally inherited from the checkout/environment.
+    # Factory Zero must never rewrite repository identity or invent an author.
     _run_git(["add", "--all"], cwd=root)
     staged = _run_git(["diff", "--cached", "--quiet"], cwd=root, check=False)
     if staged.returncode == 0:
@@ -263,14 +264,24 @@ def push_branch(worktree: str | Path, branch: str, token: str) -> None:
     _run_git(["push", "--set-upstream", "origin", branch], cwd=Path(worktree).resolve(), token=token, timeout=300)
 
 
-def run_configured_commands(repository: Repository, worktree: str | Path, kind: str) -> dict[str, Any]:
+def run_configured_commands(
+    repository: Repository,
+    worktree: str | Path,
+    kind: str,
+    *,
+    command_hook: Callable[[str, int, list[str], dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
     commands = getattr(repository, f"{kind}_commands", None)
     if commands is None:
         raise RepositoryError(f"unsupported verification command kind: {kind}")
     results: list[dict[str, Any]] = []
-    for raw in commands:
+    for index, raw in enumerate(commands):
         if not isinstance(raw, list) or not raw or any(not isinstance(part, str) or not part or "\x00" in part for part in raw):
+            if command_hook:
+                command_hook("failed", index, raw if isinstance(raw, list) else [], {"kind": kind, "error": "invalid argv"})
             raise RepositoryError("repository commands must be non-empty argv arrays")
+        if command_hook:
+            command_hook("started", index, raw, {"kind": kind})
         try:
             result = subprocess.run(
                 raw,
@@ -282,11 +293,17 @@ def run_configured_commands(repository: Repository, worktree: str | Path, kind: 
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
+            if command_hook:
+                command_hook("failed", index, raw, {"kind": kind, "error": type(exc).__name__})
             raise RepositoryError(f"configured {kind} command failed: {type(exc).__name__}") from exc
         output = ((result.stdout or "") + (result.stderr or ""))[-_MAX_OUTPUT:]
         results.append({"command": raw, "returncode": result.returncode, "output": output})
         if result.returncode:
+            if command_hook:
+                command_hook("failed", index, raw, {"kind": kind, "returncode": result.returncode, "output_chars": len(output)})
             return {"kind": kind, "passed": False, "commands": results}
+        if command_hook:
+            command_hook("succeeded", index, raw, {"kind": kind, "returncode": result.returncode, "output_chars": len(output)})
     return {"kind": kind, "passed": True, "commands": results}
 
 

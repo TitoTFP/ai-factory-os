@@ -9,7 +9,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-LIVE_MARKER = "Factory Zero hardened its lease and merge recovery controls."
+LIVE_MARKER = "Factory Zero recorded per-operation repository and GitHub audit evidence."
 
 
 @pytest.mark.factory_zero_live
@@ -60,7 +60,7 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
         headers=auth,
         json={
             "repository_id": repository.json()["id"],
-            "objective": "Add the exact sentence `Factory Zero hardened its lease and merge recovery controls.` to README.md under the opening description. Do not change the meaning of any other documentation, and keep all existing tests passing.",
+            "objective": "Add the exact sentence `Factory Zero recorded per-operation repository and GitHub audit evidence.` to README.md under the opening description. Do not change the meaning of any other documentation, and keep all existing tests passing.",
         },
     )
     assert cycle.status_code == 200, cycle.text
@@ -93,12 +93,25 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
 
     snapshot = client.get(f"/api/factories/{factory_id}", headers=auth)
     assert snapshot.status_code == 200
-    event_types = {event["event_type"] for event in snapshot.json()["events"]}
+    events = snapshot.json()["events"]
+    event_types = {event["event_type"] for event in events}
     expected_events = {
         "improvement_cycle_diagnosed",
         "improvement_cycle_verified",
         "improvement_cycle_reviewed",
         "improvement_cycle_merged",
         "improvement_cycle_completed",
+        "repository_operation_started",
+        "repository_operation_succeeded",
+        "repository_command_started",
+        "repository_command_succeeded",
+        "github_operation_started",
+        "github_operation_succeeded",
     }
     assert not expected_events - event_types, f"missing events={sorted(expected_events - event_types)} observed={sorted(event_types)}"
+    merged_event = next(event for event in events if event["event_type"] == "improvement_cycle_merged" and event["payload"].get("cycle_id") == cycle_id)
+    assert merged_event["payload"]["branch_name"]
+    assert merged_event["payload"]["pr_number"] == final["pr_number"]
+    assert merged_event["payload"]["reviewer_agent_id"] == final["reviewer_agent_id"]
+    completed_event = next(event for event in events if event["event_type"] == "improvement_cycle_completed" and event["payload"].get("cycle_id") == cycle_id)
+    assert completed_event["payload"]["merge_commit_sha"] == final["observation"]["merge_commit_sha"]

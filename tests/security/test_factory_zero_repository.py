@@ -11,7 +11,7 @@ from app.repository import RepositoryError, create_worktree, ensure_checkout, re
 from app.services import execute_repository_tool
 from app.security import decrypt_secret
 from app.db import SessionLocal
-from app.models import Factory, ImprovementCycle, Repository, RepositoryCredential
+from app.models import Event, Factory, ImprovementCycle, Repository, RepositoryCredential
 
 
 @pytest.mark.factory_zero
@@ -146,6 +146,42 @@ def test_generic_merge_tool_requires_successful_github_checks(database, monkeypa
             None,
             {"operation": "merge", "repository_id": repository.id, "worktree_path": str(worktree), "improvement_cycle_id": cycle.id, "number": 1, "head_sha": cycle.head_sha},
         ))
+    event_types = {event.event_type for event in db.scalars(select(Event).where(Event.factory_id == factory.id))}
+    assert {"repository_operation_started", "repository_operation_failed", "github_operation_started", "github_operation_succeeded"} <= event_types
+    db.close()
+
+
+@pytest.mark.factory_zero
+def test_repository_and_command_attempts_are_durably_audited(database):
+    db = SessionLocal()
+    factory = Factory(owner_id="u", name="Audit Factory", mission="m", primary_objective="o", constraints=[])
+    db.add(factory)
+    db.flush()
+    repository = Repository(
+        factory_id=factory.id,
+        owner="TitoTFP",
+        name="ai-factory-os",
+        remote_url="https://github.com/TitoTFP/ai-factory-os.git",
+        test_commands=[[sys.executable, "-c", "print('audit-ok')"]],
+    )
+    db.add(repository)
+    db.commit()
+    worktree = repository_root(factory.id, repository.id) / "worktrees" / "audit-cycle"
+    worktree.mkdir(parents=True)
+    result = asyncio.run(execute_repository_tool(
+        db,
+        factory,
+        None,
+        None,
+        {"operation": "test", "repository_id": repository.id, "worktree_path": str(worktree), "improvement_cycle_id": "audit-cycle"},
+    ))
+    assert result["passed"]
+    events = list(db.scalars(select(Event).where(Event.factory_id == factory.id)))
+    event_types = {event.event_type for event in events}
+    assert {"repository_operation_started", "repository_operation_succeeded", "repository_command_started", "repository_command_succeeded"} <= event_types
+    command_event = next(event for event in events if event.event_type == "repository_command_succeeded")
+    assert command_event.payload["argv"][0] == sys.executable
+    assert "output" not in command_event.payload
     db.close()
 
 

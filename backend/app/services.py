@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import os
 import re
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -93,6 +95,192 @@ def record_event(
     return event
 
 
+def _audit_text(value: Any, limit: int = 500) -> str:
+    """Return bounded audit text with configured secrets removed."""
+    text = str(value or "")
+    for key in ("OPENAI_API_KEY", "GITHUB_TOKEN", "GH_TOKEN", "MASTER_KEY", "SECRET_KEY"):
+        secret = str(os.environ.get(key, ""))
+        if secret:
+            text = text.replace(secret, "[REDACTED]")
+    text = re.sub(r"(?i)(bearer|basic)\s+[^\s,]+", r"\1 [REDACTED]", text)
+    text = re.sub(r"(?i)(token|api[_-]?key|secret|password)\s*[:=]\s*[^\s,]+", r"\1=[REDACTED]", text)
+    return text[:limit]
+
+
+def _audit_argv(argv: list[str]) -> list[str]:
+    """Keep command identity while bounding and redacting argument values."""
+    sensitive = re.compile(r"(?i)(token|secret|password|api[_-]?key|authorization)")
+    safe: list[str] = []
+    redact_next = False
+    for index, part in enumerate(argv):
+        value = _audit_text(part, 240)
+        if redact_next or (index and sensitive.search(value)):
+            value = "[REDACTED]"
+        redact_next = bool(sensitive.search(value)) and value != "[REDACTED]"
+        safe.append(value)
+    return safe
+
+
+def _audit_operation_input(arguments: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "operation", "repository_id", "cycle_id", "improvement_cycle_id", "path", "query",
+        "kind", "branch", "number", "head_sha", "title", "worktree_path",
+    }
+    result: dict[str, Any] = {}
+    for key in allowed:
+        if key not in arguments or arguments[key] is None:
+            continue
+        value = arguments[key]
+        if key == "worktree_path":
+            result["worktree_name"] = Path(str(value)).name
+        elif key in {"number"}:
+            try:
+                result[key] = int(value)
+            except (TypeError, ValueError):
+                result[key] = _audit_text(value, 80)
+        elif key in {"head_sha"}:
+            result[key] = _audit_text(value, 80)
+        else:
+            result[key] = _audit_text(value, 500)
+    for key in ("content", "body"):
+        if key in arguments:
+            result[f"{key}_chars"] = len(str(arguments[key]))
+    return result
+
+
+def _audit_result_failed(result: Any) -> bool:
+    return isinstance(result, dict) and "passed" in result and not bool(result["passed"])
+
+
+def _audit_result(result: Any) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return {"result_type": type(result).__name__}
+    summary: dict[str, Any] = {}
+    for key in ("repository_id", "ready", "path", "worktree_path", "branch", "base_sha", "head_sha", "pushed", "number", "html_url", "merged", "state", "merge_commit_sha", "total_count", "passed", "kind"):
+        if key in result:
+            value = result[key]
+            summary[key] = _audit_text(value, 500) if isinstance(value, str) else value
+    commands = result.get("commands")
+    if isinstance(commands, list):
+        summary["commands"] = [
+            {
+                "argv": _audit_argv(item.get("command", [])) if isinstance(item, dict) and isinstance(item.get("command"), list) else [],
+                "returncode": item.get("returncode") if isinstance(item, dict) else None,
+                "output_chars": len(str(item.get("output", ""))) if isinstance(item, dict) else 0,
+            }
+            for item in commands
+        ]
+    return summary
+
+
+def _audit_error(exc: BaseException) -> dict[str, str]:
+    return {"error_type": type(exc).__name__, "error": _audit_text(exc, 1_000)}
+
+
+def _audit_start(
+    db: Session,
+    factory_id: str,
+    event_type: str,
+    payload: dict[str, Any],
+    *,
+    actor_type: str = "system",
+    actor_id: str = "system",
+) -> str:
+    attempt_id = new_id()
+    record_event(db, factory_id, event_type, {**payload, "attempt_id": attempt_id}, actor_type=actor_type, actor_id=actor_id)
+    db.commit()
+    return attempt_id
+
+
+def _audit_finish(
+    db: Session,
+    factory_id: str,
+    event_type: str,
+    payload: dict[str, Any],
+    *,
+    actor_type: str = "system",
+    actor_id: str = "system",
+    rollback: bool = False,
+) -> None:
+    if rollback:
+        db.rollback()
+    record_event(db, factory_id, event_type, payload, actor_type=actor_type, actor_id=actor_id)
+    db.commit()
+
+
+def _command_audit_hook(factory_id: str, repository_id: str, cycle_id: str | None) -> Callable[[str, int, list[str], dict[str, Any]], None]:
+    attempts: dict[int, str] = {}
+
+    def hook(status: str, index: int, argv: list[str], details: dict[str, Any]) -> None:
+        attempt_id = attempts.setdefault(index, new_id())
+        audit_db = SessionLocal()
+        try:
+            payload = {
+                "attempt_id": attempt_id,
+                "repository_id": repository_id,
+                "cycle_id": cycle_id,
+                "kind": details.get("kind"),
+                "index": index,
+                "argv": _audit_argv(argv),
+                **{key: value for key, value in details.items() if key in {"returncode", "output_chars", "error"}},
+            }
+            record_event(audit_db, factory_id, f"repository_command_{status}", payload)
+            audit_db.commit()
+        except Exception:
+            audit_db.rollback()
+            raise
+        finally:
+            audit_db.close()
+
+    return hook
+
+
+async def _audited_repository_call(
+    db: Session,
+    factory_id: str,
+    repository_id: str,
+    cycle_id: str | None,
+    operation: str,
+    call: Callable[[], Any],
+    *,
+    details: dict[str, Any] | None = None,
+) -> Any:
+    payload = {"repository_id": repository_id, "cycle_id": cycle_id, "operation": operation, **(details or {})}
+    attempt_id = _audit_start(db, factory_id, "repository_operation_started", payload)
+    try:
+        result = await asyncio.to_thread(call)
+    except Exception as exc:
+        _audit_finish(db, factory_id, "repository_operation_failed", {**payload, "attempt_id": attempt_id, **_audit_error(exc)}, rollback=True)
+        raise
+    result_payload = {**payload, "attempt_id": attempt_id, "result": _audit_result(result)}
+    if _audit_result_failed(result):
+        _audit_finish(db, factory_id, "repository_operation_failed", result_payload)
+    else:
+        _audit_finish(db, factory_id, "repository_operation_succeeded", result_payload)
+    return result
+
+
+async def _audited_github_call(
+    db: Session,
+    factory_id: str,
+    repository_id: str,
+    cycle_id: str | None,
+    operation: str,
+    call: Callable[[], Awaitable[Any]],
+    *,
+    details: dict[str, Any] | None = None,
+) -> Any:
+    payload = {"repository_id": repository_id, "cycle_id": cycle_id, "operation": operation, **(details or {})}
+    attempt_id = _audit_start(db, factory_id, "github_operation_started", payload)
+    try:
+        result = await call()
+    except Exception as exc:
+        _audit_finish(db, factory_id, "github_operation_failed", {**payload, "attempt_id": attempt_id, **_audit_error(exc)}, rollback=True)
+        raise
+    _audit_finish(db, factory_id, "github_operation_succeeded", {**payload, "attempt_id": attempt_id, "result": _audit_result(result)})
+    return result
+
+
 def credential_for(db: Session, factory_id: str) -> FactoryCredential | None:
     return db.scalar(
         select(FactoryCredential).where(
@@ -157,93 +345,154 @@ async def execute_repository_tool(
 ) -> dict[str, Any]:
     operation = str(arguments.get("operation", "status"))
     repository_id = str(arguments.get("repository_id") or (task.inputs.get("repository_id") if task else ""))
-    repository = repository_for(db, factory.id, repository_id)
-    credential = db.scalar(
-        select(RepositoryCredential).where(
-            RepositoryCredential.factory_id == factory.id,
-            RepositoryCredential.repository_id == repository.id,
-            RepositoryCredential.provider == "github",
-        )
+    cycle_id = str(arguments.get("improvement_cycle_id") or arguments.get("cycle_id") or (task.inputs.get("improvement_cycle_id") if task else "")) or None
+    actor_type = "agent" if agent else "system"
+    actor_id = agent.id if agent else "system"
+    audit_payload = {
+        "repository_id": repository_id,
+        "cycle_id": cycle_id,
+        "operation": operation,
+        "input": _audit_operation_input(arguments),
+    }
+    attempt_id = _audit_start(
+        db,
+        factory.id,
+        "repository_operation_started",
+        audit_payload,
+        actor_type=actor_type,
+        actor_id=actor_id,
     )
-    required = _repository_permission(operation)
-    if credential and required not in (credential.permissions or []):
-        raise PermissionError(f"repository operation is not allowed: {operation}")
-    if operation in {"push", "create_pr", "merge"} and not credential:
-        raise RepositoryError("repository credential is required for this operation")
-    token = repository_token_for(db, factory.id, repository.id)
-    worktree = str(arguments.get("worktree_path") or (task.inputs.get("worktree_path") if task else ""))
-    if operation == "checkout":
-        checkout = ensure_checkout(repository, token)
-        result = {"repository_id": repository.id, "ready": True, "path": str(checkout)}
-    elif operation == "worktree":
-        cycle_id = str(arguments.get("cycle_id") or (task.inputs.get("improvement_cycle_id") if task else ""))
-        if not cycle_id:
-            raise RepositoryError("cycle_id is required to create a worktree")
-        path, branch, base_sha = create_worktree(repository, cycle_id, token)
-        result = {"worktree_path": str(path), "branch": branch, "base_sha": base_sha}
-    elif not worktree:
-        raise RepositoryError("worktree_path is required for this repository operation")
-    else:
-        worktree_root = (repository_root(factory.id, repository.id) / "worktrees").resolve()
-        resolved_worktree = Path(worktree).resolve()
-        if worktree_root not in resolved_worktree.parents:
-            raise RepositoryError("repository operation escaped the worktree boundary")
-        cycle_scope = str(arguments.get("improvement_cycle_id") or (task.inputs.get("improvement_cycle_id") if task else ""))
-        if cycle_scope and resolved_worktree.name != cycle_scope:
-            raise RepositoryError("repository operation targeted a different improvement cycle")
-        if operation == "read":
-            result = read_file(worktree, str(arguments.get("path", "README.md")))
-        elif operation == "search":
-            result = search_files(worktree, str(arguments.get("query", "")))
-        elif operation == "write":
-            result = write_file(worktree, str(arguments.get("path", "")), str(arguments.get("content", "")))
-        elif operation == "status":
-            result = git_status(worktree)
-        elif operation == "diff":
-            result = git_diff(worktree)
-        elif operation == "commit":
-            result = {"head_sha": git_commit(worktree, str(arguments.get("message", "Factory Zero improvement")))}
-        elif operation in {"verify", "test", "build", "lint"}:
-            kind = str(arguments.get("kind", operation if operation in {"test", "build", "lint"} else "test"))
-            result = run_configured_commands(repository, worktree, kind)
-        elif operation == "push":
-            branch = str(arguments.get("branch", ""))
-            if not branch:
-                raise RepositoryError("branch is required to push a repository worktree")
-            push_branch(worktree, branch, token or "")
-            result = {"branch": branch, "pushed": True}
-        elif operation == "create_pr":
-            branch = str(arguments.get("branch", ""))
-            if not branch:
-                raise RepositoryError("branch is required to create a pull request")
-            result = await create_pull_request(repository, token or "", branch, str(arguments.get("title", "Factory Zero improvement")), str(arguments.get("body", "")))
-        elif operation == "merge":
-            cycle_id = str(arguments.get("improvement_cycle_id") or (task.inputs.get("improvement_cycle_id") if task else ""))
-            cycle = db.scalar(select(ImprovementCycle).where(ImprovementCycle.id == cycle_id, ImprovementCycle.factory_id == factory.id)) if cycle_id else None
-            if not cycle or cycle.phase != "merge":
-                raise PermissionError("merge requires an active improvement cycle")
-            if not bool(cycle.verification.get("passed")) or not bool(cycle.review.get("approved")):
-                raise PermissionError("merge requires verified work and an independent approved review")
-            try:
-                pull_number = int(arguments.get("number", 0))
-            except (TypeError, ValueError) as exc:
-                raise RepositoryError("invalid pull request number") from exc
-            head_sha = str(arguments.get("head_sha") or cycle.head_sha or "")
-            if not head_sha:
-                raise PermissionError("merge requires a committed head SHA")
-            checks = await check_runs(repository, token or "", head_sha)
-            if not check_runs_passed(checks):
-                raise PermissionError("merge requires successful GitHub checks")
-            result = await merge_pull_request(repository, token or "", pull_number, head_sha)
+    try:
+        repository = repository_for(db, factory.id, repository_id)
+        credential = db.scalar(
+            select(RepositoryCredential).where(
+                RepositoryCredential.factory_id == factory.id,
+                RepositoryCredential.repository_id == repository.id,
+                RepositoryCredential.provider == "github",
+            )
+        )
+        required = _repository_permission(operation)
+        if credential and required not in (credential.permissions or []):
+            raise PermissionError(f"repository operation is not allowed: {operation}")
+        if operation in {"push", "create_pr", "merge"} and not credential:
+            raise RepositoryError("repository credential is required for this operation")
+        token = repository_token_for(db, factory.id, repository.id)
+        worktree = str(arguments.get("worktree_path") or (task.inputs.get("worktree_path") if task else ""))
+        if operation == "checkout":
+            checkout = ensure_checkout(repository, token)
+            result = {"repository_id": repository.id, "ready": True, "path": str(checkout)}
+        elif operation == "worktree":
+            if not cycle_id:
+                raise RepositoryError("cycle_id is required to create a worktree")
+            path, branch, base_sha = create_worktree(repository, cycle_id, token)
+            result = {"worktree_path": str(path), "branch": branch, "base_sha": base_sha}
+        elif not worktree:
+            raise RepositoryError("worktree_path is required for this repository operation")
         else:
-            raise RepositoryError(f"unsupported repository operation: {operation}")
+            worktree_root = (repository_root(factory.id, repository.id) / "worktrees").resolve()
+            resolved_worktree = Path(worktree).resolve()
+            if worktree_root not in resolved_worktree.parents:
+                raise RepositoryError("repository operation escaped the worktree boundary")
+            if cycle_id and resolved_worktree.name != cycle_id:
+                raise RepositoryError("repository operation targeted a different improvement cycle")
+            if operation == "read":
+                result = read_file(worktree, str(arguments.get("path", "README.md")))
+            elif operation == "search":
+                result = search_files(worktree, str(arguments.get("query", "")))
+            elif operation == "write":
+                result = write_file(worktree, str(arguments.get("path", "")), str(arguments.get("content", "")))
+            elif operation == "status":
+                result = git_status(worktree)
+            elif operation == "diff":
+                result = git_diff(worktree)
+            elif operation == "commit":
+                result = {"head_sha": git_commit(worktree, str(arguments.get("message", "Factory Zero improvement")))}
+            elif operation in {"verify", "test", "build", "lint"}:
+                kind = str(arguments.get("kind", operation if operation in {"test", "build", "lint"} else "test"))
+                hook = _command_audit_hook(factory.id, repository.id, cycle_id)
+                result = run_configured_commands(repository, worktree, kind, command_hook=hook)
+            elif operation == "push":
+                branch = str(arguments.get("branch", ""))
+                if not branch:
+                    raise RepositoryError("branch is required to push a repository worktree")
+                push_branch(worktree, branch, token or "")
+                result = {"branch": branch, "pushed": True}
+            elif operation == "create_pr":
+                branch = str(arguments.get("branch", ""))
+                if not branch:
+                    raise RepositoryError("branch is required to create a pull request")
+                result = await _audited_github_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle_id,
+                    "create_pull_request",
+                    lambda: create_pull_request(repository, token or "", branch, str(arguments.get("title", "Factory Zero improvement")), str(arguments.get("body", ""))),
+                    details={"branch": branch},
+                )
+            elif operation == "merge":
+                cycle = db.scalar(select(ImprovementCycle).where(ImprovementCycle.id == cycle_id, ImprovementCycle.factory_id == factory.id)) if cycle_id else None
+                if not cycle or cycle.phase != "merge":
+                    raise PermissionError("merge requires an active improvement cycle")
+                if not bool(cycle.verification.get("passed")) or not bool(cycle.review.get("approved")):
+                    raise PermissionError("merge requires verified work and an independent approved review")
+                try:
+                    pull_number = int(arguments.get("number", 0))
+                except (TypeError, ValueError) as exc:
+                    raise RepositoryError("invalid pull request number") from exc
+                head_sha = str(arguments.get("head_sha") or cycle.head_sha or "")
+                if not head_sha:
+                    raise PermissionError("merge requires a committed head SHA")
+                checks = await _audited_github_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle_id,
+                    "check_runs",
+                    lambda: check_runs(repository, token or "", head_sha),
+                    details={"head_sha": head_sha},
+                )
+                if not check_runs_passed(checks):
+                    raise PermissionError("merge requires successful GitHub checks")
+                result = await _audited_github_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle_id,
+                    "merge_pull_request",
+                    lambda: merge_pull_request(repository, token or "", pull_number, head_sha),
+                    details={"number": pull_number, "head_sha": head_sha},
+                )
+            else:
+                raise RepositoryError(f"unsupported repository operation: {operation}")
+    except Exception as exc:
+        _audit_finish(
+            db,
+            factory.id,
+            "repository_operation_failed",
+            {**audit_payload, "attempt_id": attempt_id, **_audit_error(exc)},
+            actor_type=actor_type,
+            actor_id=actor_id,
+            rollback=True,
+        )
+        raise
+
+    operation_event = "repository_operation_failed" if _audit_result_failed(result) else "repository_operation_succeeded"
+    _audit_finish(
+        db,
+        factory.id,
+        operation_event,
+        {**audit_payload, "attempt_id": attempt_id, "result": _audit_result(result)},
+        actor_type=actor_type,
+        actor_id=actor_id,
+    )
     record_event(
         db,
         factory.id,
         "repository_tool_called",
-        {"repository_id": repository.id, "operation": operation, "result": {key: value for key, value in result.items() if key not in {"content", "diff", "output"}}},
-        actor_type="agent" if agent else "system",
-        actor_id=agent.id if agent else "system",
+        {"repository_id": repository.id, "operation": operation, "result": _audit_result(result)},
+        actor_type=actor_type,
+        actor_id=actor_id,
     )
     db.commit()
     return result
@@ -1141,7 +1390,15 @@ class Runtime:
         token = repository_token_for(db, factory.id, repository.id)
         if cycle.phase == "discover":
             if not cycle.worktree_path:
-                path, branch, base_sha = await asyncio.to_thread(create_worktree, repository, cycle.id, token)
+                path, branch, base_sha = await _audited_repository_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle.id,
+                    "git_worktree_create",
+                    lambda: create_worktree(repository, cycle.id, token),
+                    details={"branch": f"factory-zero/{cycle.id[:24]}"},
+                )
                 cycle.worktree_path = str(path)
                 cycle.branch_name = branch
                 cycle.base_sha = base_sha
@@ -1182,13 +1439,45 @@ class Runtime:
             cycle.error = None
             record_event(db, factory.id, "improvement_cycle_implemented", {"cycle_id": cycle.id, "branch": cycle.branch_name})
         elif cycle.phase == "verify":
-            test_result = await asyncio.to_thread(run_configured_commands, repository, cycle.worktree_path or "", "test")
-            build_result = await asyncio.to_thread(run_configured_commands, repository, cycle.worktree_path or "", "build")
-            lint_result = await asyncio.to_thread(run_configured_commands, repository, cycle.worktree_path or "", "lint")
+            command_hook = _command_audit_hook(factory.id, repository.id, cycle.id)
+            test_result = await _audited_repository_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "configured_commands",
+                lambda: run_configured_commands(repository, cycle.worktree_path or "", "test", command_hook=command_hook),
+                details={"kind": "test"},
+            )
+            build_result = await _audited_repository_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "configured_commands",
+                lambda: run_configured_commands(repository, cycle.worktree_path or "", "build", command_hook=command_hook),
+                details={"kind": "build"},
+            )
+            lint_result = await _audited_repository_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "configured_commands",
+                lambda: run_configured_commands(repository, cycle.worktree_path or "", "lint", command_hook=command_hook),
+                details={"kind": "lint"},
+            )
             required = [test_result]
             optional = [build_result, lint_result]
             passed = bool(test_result.get("commands")) and all(bool(result.get("passed")) for result in required + [result for result in optional if result.get("commands")])
-            status_result = await asyncio.to_thread(git_status, cycle.worktree_path or "")
+            status_result = await _audited_repository_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "git_status",
+                lambda: git_status(cycle.worktree_path or ""),
+            )
             changed = bool(status_result.get("status") or status_result.get("diff_stat"))
             passed = passed and changed
             cycle.verification = {"passed": passed, "test": test_result, "build": build_result, "lint": lint_result, "head_sha": status_result.get("diff_stat", ""), "changed": changed}
@@ -1205,7 +1494,15 @@ class Runtime:
             author = db.get(Agent, cycle.author_agent_id)
             if not reviewer or not author or reviewer.factory_id != factory.id or reviewer.id == author.id:
                 raise ServiceError("Factory Zero requires an independent reviewer")
-            diff = git_diff(cycle.worktree_path or "").get("diff", "")
+            diff_result = await _audited_repository_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "git_diff",
+                lambda: git_diff(cycle.worktree_path or ""),
+            )
+            diff = diff_result.get("diff", "")
             text = await self._cycle_model_call(
                 db,
                 factory,
@@ -1237,33 +1534,110 @@ class Runtime:
             worktree = cycle.worktree_path or ""
             commit_message = str(cycle.proposal.get("implementation", {}).get("commit_message", "Factory Zero improvement"))
             if lease_token is None:
-                cycle.head_sha = git_commit(worktree, commit_message)
+                cycle.head_sha = await _audited_repository_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle.id,
+                    "git_commit",
+                    lambda: git_commit(worktree, commit_message),
+                    details={"message_chars": len(commit_message)},
+                )
             else:
-                status_result = await asyncio.to_thread(git_status, worktree)
-                current_head = await asyncio.to_thread(git_head, worktree)
+                status_result = await _audited_repository_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle.id,
+                    "git_status",
+                    lambda: git_status(worktree),
+                )
+                current_head = await _audited_repository_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle.id,
+                    "git_head",
+                    lambda: git_head(worktree),
+                )
                 changed = bool(status_result.get("status") or status_result.get("diff_stat"))
                 if current_head == cycle.base_sha:
                     if not changed:
                         raise RepositoryError("worktree has no changes to commit")
-                    cycle.head_sha = await asyncio.to_thread(git_commit, worktree, commit_message)
+                    cycle.head_sha = await _audited_repository_call(
+                        db,
+                        factory.id,
+                        repository.id,
+                        cycle.id,
+                        "git_commit",
+                        lambda: git_commit(worktree, commit_message),
+                        details={"message_chars": len(commit_message)},
+                    )
                 else:
                     cycle.head_sha = current_head
-            await asyncio.to_thread(push_branch, worktree, cycle.branch_name or "", token)
-            pr: dict[str, Any] | None = None
+            await _audited_repository_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "git_push",
+                lambda: push_branch(worktree, cycle.branch_name or "", token),
+                details={"branch": cycle.branch_name},
+            )
+            pr: Any = None
             if lease_token is not None:
                 if cycle.pr_number:
-                    pr = await pull_request(repository, token, cycle.pr_number)
+                    existing_pr_number = cycle.pr_number
+                    pr = await _audited_github_call(
+                        db,
+                        factory.id,
+                        repository.id,
+                        cycle.id,
+                        "pull_request_get",
+                        lambda: pull_request(repository, token, existing_pr_number),
+                        details={"number": existing_pr_number},
+                    )
                 else:
-                    pr = await find_pull_request(repository, token, cycle.branch_name or "")
+                    pr = await _audited_github_call(
+                        db,
+                        factory.id,
+                        repository.id,
+                        cycle.id,
+                        "pull_request_find",
+                        lambda: find_pull_request(repository, token, cycle.branch_name or ""),
+                        details={"branch": cycle.branch_name},
+                    )
             if pr is not None and lease_token is not None and not cycle.pr_number:
                 try:
                     existing_number = int(pr.get("number", 0) or 0)
                 except (TypeError, ValueError) as exc:
                     raise RepositoryError("GitHub returned an invalid pull request number") from exc
                 if existing_number:
-                    pr = await pull_request(repository, token, existing_number)
+                    pr = await _audited_github_call(
+                        db,
+                        factory.id,
+                        repository.id,
+                        cycle.id,
+                        "pull_request_get",
+                        lambda: pull_request(repository, token, existing_number),
+                        details={"number": existing_number},
+                    )
             if pr is None:
-                pr = await create_pull_request(repository, token, cycle.branch_name or "", f"Factory Zero: {cycle.objective[:180]}", json.dumps({"objective": cycle.objective, "proposal": cycle.proposal, "verification": cycle.verification, "review": cycle.review}, ensure_ascii=False)[:20_000])
+                pr = await _audited_github_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle.id,
+                    "pull_request_create",
+                    lambda: create_pull_request(
+                        repository,
+                        token,
+                        cycle.branch_name or "",
+                        f"Factory Zero: {cycle.objective[:180]}",
+                        json.dumps({"objective": cycle.objective, "proposal": cycle.proposal, "verification": cycle.verification, "review": cycle.review}, ensure_ascii=False)[:20_000],
+                    ),
+                    details={"branch": cycle.branch_name},
+                )
             try:
                 cycle.pr_number = int(pr.get("number", 0) or 0)
             except (TypeError, ValueError) as exc:
@@ -1277,25 +1651,75 @@ class Runtime:
                 pull_number = int(cycle.pr_number)
             except (TypeError, ValueError) as exc:
                 raise RepositoryError("GitHub returned an invalid pull request number") from exc
+            checks: dict[str, Any] = {"total_count": 0, "check_runs": []}
             if lease_token is not None:
-                checks = await check_runs(repository, token, head_sha)
+                checks = await _audited_github_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle.id,
+                    "check_runs",
+                    lambda: check_runs(repository, token, head_sha),
+                    details={"head_sha": head_sha},
+                )
                 cycle.observation = {**cycle.observation, "pre_merge_checks": checks}
                 if not check_runs_passed(checks):
-                    cycle.observation = {**cycle.observation, "pre_merge_checks": checks}
                     raise RepositoryError("GitHub checks have not all passed")
             merge = {"merged": bool(pr.get("merged"))}
             if not merge["merged"]:
-                merge = await merge_pull_request(repository, token, pull_number, head_sha)
+                merge = await _audited_github_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle.id,
+                    "pull_request_merge",
+                    lambda: merge_pull_request(repository, token, pull_number, head_sha),
+                    details={"number": pull_number, "head_sha": head_sha},
+                )
             if not bool(merge.get("merged")):
                 raise RepositoryError(str(merge.get("message", "GitHub did not merge the pull request")))
             cycle.phase = "observe"
             cycle.error = None
-            record_event(db, factory.id, "improvement_cycle_merged", {"cycle_id": cycle.id, "pr_number": cycle.pr_number, "pr_url": cycle.pr_url, "head_sha": cycle.head_sha, "reconciled": bool(pr.get("merged"))})
+            record_event(
+                db,
+                factory.id,
+                "improvement_cycle_merged",
+                {
+                    "cycle_id": cycle.id,
+                    "repository_id": repository.id,
+                    "branch_name": cycle.branch_name,
+                    "base_sha": cycle.base_sha,
+                    "head_sha": cycle.head_sha,
+                    "pr_number": cycle.pr_number,
+                    "pr_url": cycle.pr_url,
+                    "reviewer_agent_id": cycle.reviewer_agent_id,
+                    "checks": _audit_result(checks),
+                    "merge": _audit_result(merge),
+                    "reconciled": bool(pr.get("merged")),
+                },
+            )
         elif cycle.phase == "observe":
-            if not token or not cycle.pr_number:
+            if not token or cycle.pr_number is None:
                 raise RepositoryError("merged cycle is missing GitHub reconciliation data")
-            pr = await pull_request(repository, token, cycle.pr_number)
-            checks = await check_runs(repository, token, cycle.head_sha or str(pr.get("merge_commit_sha", "")))
+            observed_pr_number: int = cycle.pr_number
+            pr = await _audited_github_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "pull_request_get",
+                lambda: pull_request(repository, token, observed_pr_number),
+                details={"number": observed_pr_number},
+            )
+            checks = await _audited_github_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "check_runs",
+                lambda: check_runs(repository, token, cycle.head_sha or str(pr.get("merge_commit_sha", ""))),
+                details={"head_sha": cycle.head_sha or str(pr.get("merge_commit_sha", ""))},
+            )
             cycle.observation = {
                 **cycle.observation,
                 "merged": bool(pr.get("merged")),
@@ -1306,7 +1730,15 @@ class Runtime:
                     "conclusion": [item.get("conclusion") for item in checks.get("check_runs", []) if isinstance(item, dict)],
                 },
             }
-            await asyncio.to_thread(cleanup_worktree, repository, cycle.worktree_path or "", cycle.branch_name, token)
+            await _audited_repository_call(
+                db,
+                factory.id,
+                repository.id,
+                cycle.id,
+                "git_worktree_cleanup",
+                lambda: cleanup_worktree(repository, cycle.worktree_path or "", cycle.branch_name, token),
+                details={"branch": cycle.branch_name},
+            )
             self._assert_cycle_lease(db, cycle_id, lease_token, lease_lost)
             cycle.status = "completed"
             cycle.phase = "completed"
@@ -1314,7 +1746,26 @@ class Runtime:
             cycle.lease_token = None
             cycle.completed_at = now()
             cycle.error = None
-            record_event(db, factory.id, "improvement_cycle_completed", {"cycle_id": cycle.id, "pr_number": cycle.pr_number, "merge_commit_sha": cycle.observation.get("merge_commit_sha")})
+            record_event(
+                db,
+                factory.id,
+                "improvement_cycle_completed",
+                {
+                    "cycle_id": cycle.id,
+                    "repository_id": repository.id,
+                    "branch_name": cycle.branch_name,
+                    "base_sha": cycle.base_sha,
+                    "head_sha": cycle.head_sha,
+                    "pr_number": cycle.pr_number,
+                    "pr_url": cycle.pr_url,
+                    "author_agent_id": cycle.author_agent_id,
+                    "reviewer_agent_id": cycle.reviewer_agent_id,
+                    "verification_passed": bool(cycle.verification.get("passed")),
+                    "review_approved": bool(cycle.review.get("approved")),
+                    "merge_commit_sha": cycle.observation.get("merge_commit_sha"),
+                    "observation": _audit_result(cycle.observation),
+                },
+            )
         if cycle.status == "running":
             self._assert_cycle_lease(db, cycle_id, lease_token, lease_lost)
         cycle.updated_at = now()
