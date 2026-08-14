@@ -3,8 +3,13 @@ from __future__ import annotations
 import os
 import sys
 import time
+from pathlib import Path
 
 import pytest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+LIVE_MARKER = "Factory Zero keeps an auditable trail for every self-improvement."
 
 
 @pytest.mark.factory_zero_live
@@ -13,6 +18,8 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
     github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
     if not provider_key or not github_token:
         pytest.skip("set OPENAI_API_KEY and GITHUB_TOKEN for the real Factory Zero cycle")
+    if (ROOT / "README.md").is_file() and LIVE_MARKER in (ROOT / "README.md").read_text(encoding="utf-8"):
+        pytest.skip("the real Factory Zero marker is already merged; use a new objective for another cycle")
 
     created = client.post(
         "/api/factories",
