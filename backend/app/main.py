@@ -128,6 +128,14 @@ def _snapshot(db: Session, factory: Factory) -> FactorySnapshot:
     where = lambda model: _factory_query(model, factory.id)  # noqa: E731
     run = db.scalar(select(FactoryRun).where(FactoryRun.factory_id == factory.id).order_by(FactoryRun.created_at.desc()))
     usage = _usage_response(db, factory)
+    recent_events = list(db.scalars(where(Event).order_by(Event.created_at.desc(), Event.id.desc()).limit(200)))
+    lifecycle_events = list(db.scalars(
+        where(Event).where(Event.event_type.like("improvement_cycle_%"))
+        .order_by(Event.created_at.desc(), Event.id.desc())
+        .limit(200)
+    ))
+    event_by_id = {event.id: event for event in [*recent_events, *lifecycle_events]}
+    events = sorted(event_by_id.values(), key=lambda event: (event.created_at, event.id), reverse=True)
     return FactorySnapshot(
         factory=_factory_response(factory),
         spaces=[SpaceResponse.model_validate(x) for x in db.scalars(where(Space))],
@@ -136,7 +144,7 @@ def _snapshot(db: Session, factory: Factory) -> FactorySnapshot:
         tasks=[TaskResponse.model_validate(x) for x in db.scalars(where(Task))],
         messages=[MessageResponse.model_validate(x) for x in db.scalars(where(Message).order_by(Message.created_at.desc()).limit(100))],
         artifacts=[ArtifactResponse.model_validate(x) for x in db.scalars(where(Artifact).order_by(Artifact.created_at.desc()).limit(100))],
-        events=[EventResponse.model_validate(x) for x in db.scalars(where(Event).order_by(Event.created_at.desc()).limit(200))],
+        events=[EventResponse.model_validate(x) for x in events],
         run=RunResponse.model_validate(run) if run else None,
         usage=usage,
         repositories=[RepositoryResponse.model_validate(x) for x in db.scalars(where(Repository))],

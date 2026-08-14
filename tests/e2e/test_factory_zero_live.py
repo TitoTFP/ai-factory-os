@@ -53,7 +53,7 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
         headers=auth,
         json={
             "repository_id": repository.json()["id"],
-            "objective": "Add the exact sentence `Factory Zero observed its first verified self-improvement.` to README.md under the opening description. Do not change the meaning of any other documentation, and keep all existing tests passing.",
+            "objective": "Add the exact sentence `Factory Zero keeps an auditable trail for every self-improvement.` to README.md under the opening description. Do not change the meaning of any other documentation, and keep all existing tests passing.",
         },
     )
     assert cycle.status_code == 200, cycle.text
