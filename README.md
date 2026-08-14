@@ -25,8 +25,9 @@ python -m venv .venv
 .venv/bin/pip install -e .
 cd frontend && npm ci && cd ..
 docker compose up -d db
-DATABASE_URL=postgresql+psycopg://factory:factory@localhost:5432/factory .venv/bin/alembic upgrade head
-PYTHONPATH=backend DATABASE_URL=postgresql+psycopg://factory:factory@localhost:5432/factory .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+# Compose maps PostgreSQL to host port 5433 so a native PostgreSQL on 5432 can coexist.
+DATABASE_URL=postgresql+psycopg://factory:factory@localhost:5433/factory .venv/bin/alembic upgrade head
+PYTHONPATH=backend DATABASE_URL=postgresql+psycopg://factory:factory@localhost:5433/factory .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 # in a second terminal
 cd frontend && npm run dev
 ```
