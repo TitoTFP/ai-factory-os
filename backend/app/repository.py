@@ -35,7 +35,7 @@ def _component(value: str, label: str) -> str:
 
 
 def validate_factory_zero_repository(owner: str, name: str) -> None:
-    if owner.casefold() != _FACTORY_ZERO_OWNER.casefold() or name.casefold() != _FACTORY_ZERO_NAME.casefold():
+    if owner != _FACTORY_ZERO_OWNER or name != _FACTORY_ZERO_NAME:
         raise RepositoryError("Factory Zero is restricted to TitoTFP/ai-factory-os")
 
 
@@ -64,17 +64,25 @@ def repository_root(factory_id: str, repository_id: str) -> Path:
 
 
 def safe_repository_path(worktree: str | Path, relative: str) -> Path:
-    root = Path(worktree).resolve()
+    worktree_root = Path(worktree)
+    if worktree_root.is_symlink():
+        raise RepositoryError("repository worktree cannot be a symlink")
+    root = worktree_root.resolve()
     raw = str(relative).strip()
-    parts = Path(raw).parts
-    if not raw or Path(raw).is_absolute() or ".." in parts:
+    relative_path = Path(raw)
+    parts = relative_path.parts
+    if not raw or relative_path.is_absolute() or ".." in parts:
         raise RepositoryError("repository path must be relative to the worktree")
-    candidate = (root / raw).resolve()
-    if candidate != root and root not in candidate.parents:
+    candidate = root / raw
+    cursor = candidate
+    while cursor != root:
+        if cursor.is_symlink():
+            raise RepositoryError("repository path cannot traverse a symlink")
+        cursor = cursor.parent
+    resolved = candidate.resolve()
+    if resolved != root and root not in resolved.parents:
         raise RepositoryError("repository path escapes the worktree boundary")
-    if candidate.is_symlink():
-        raise RepositoryError("repository path cannot target a symlink")
-    return candidate
+    return resolved
 
 
 def _git_env(token: str | None = None) -> dict[str, str]:
@@ -144,8 +152,13 @@ def create_worktree(repository: Repository, cycle_id: str, token: str | None = N
     _run_git(["fetch", "--prune", "origin", repository.default_branch], cwd=checkout, token=token)
     base_sha = _run_git(["rev-parse", f"refs/remotes/origin/{repository.default_branch}"], cwd=checkout, token=token).stdout.strip()
     branch = f"factory-zero/{_component(cycle_id, 'cycle identifier')[:24]}"
-    path = _repo_base(repository) / "worktrees" / _component(cycle_id, "cycle identifier")
-    path.parent.mkdir(parents=True, exist_ok=True)
+    worktrees = _repo_base(repository) / "worktrees"
+    if worktrees.is_symlink():
+        raise RepositoryError("repository worktrees root cannot be a symlink")
+    if worktrees.exists() and not worktrees.is_dir():
+        raise RepositoryError("repository worktrees root must be a directory")
+    worktrees.mkdir(parents=True, exist_ok=True)
+    path = worktrees / _component(cycle_id, "cycle identifier")
     if path.exists() or path.is_symlink():
         raise RepositoryError("worktree path already exists")
     _run_git(["worktree", "add", "-b", branch, str(path), base_sha], cwd=checkout, token=token, timeout=180)
@@ -354,3 +367,8 @@ async def pull_request(repository: Repository, token: str, number: int) -> dict[
 
 async def check_runs(repository: Repository, token: str, sha: str) -> dict[str, Any]:
     return await github_request(token, "GET", f"/repos/{repository.owner}/{repository.name}/commits/{sha}/check-runs")
+
+
+def check_runs_passed(checks: dict[str, Any]) -> bool:
+    runs = [item for item in checks.get("check_runs", []) if isinstance(item, dict)]
+    return not runs or all(item.get("status") == "completed" and item.get("conclusion") == "success" for item in runs)

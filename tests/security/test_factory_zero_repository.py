@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 
 import pytest
 from sqlalchemy import select
 
-from app.repository import RepositoryError, ensure_checkout, read_file, run_configured_commands, safe_repository_path, write_file
+from app.repository import RepositoryError, create_worktree, ensure_checkout, read_file, run_configured_commands, safe_repository_path, write_file
 from app.security import decrypt_secret
 from app.db import SessionLocal
 from app.models import Repository, RepositoryCredential
@@ -24,6 +25,9 @@ def test_repository_workspace_rejects_escape_and_runs_only_argv_commands(tmp_pat
     assert (worktree / "src/change.txt").read_text(encoding="utf-8") == "verified"
     with pytest.raises(RepositoryError, match="relative"):
         safe_repository_path(worktree, "../secret.txt")
+    (worktree / "linked.txt").symlink_to(secret)
+    with pytest.raises(RepositoryError, match="symlink"):
+        safe_repository_path(worktree, "linked.txt")
 
     repository = Repository(
         factory_id="factory",
@@ -57,6 +61,34 @@ def test_checkout_symlink_is_rejected_before_git_runs(tmp_path, monkeypatch):
     )
     with pytest.raises(RepositoryError, match="cannot be a symlink"):
         ensure_checkout(repository)
+
+
+@pytest.mark.factory_zero
+def test_worktrees_root_symlink_is_rejected_before_git_worktree_add(tmp_path, monkeypatch):
+    repository_root = tmp_path / "factories"
+    monkeypatch.setattr("app.repository.REPOSITORY_ROOT", repository_root)
+    repository_base = repository_root / "factory" / "repositories" / "repo"
+    checkout = repository_base / "checkout"
+    checkout.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repository_base / "worktrees").symlink_to(outside, target_is_directory=True)
+
+    def fake_git(args, **_kwargs):
+        stdout = "b" * 40 + "\n" if args and args[0] == "rev-parse" else ""
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("app.repository.ensure_checkout", lambda *_args, **_kwargs: checkout)
+    monkeypatch.setattr("app.repository._run_git", fake_git)
+    repository = Repository(
+        id="repo",
+        factory_id="factory",
+        owner="TitoTFP",
+        name="ai-factory-os",
+        remote_url="https://github.com/TitoTFP/ai-factory-os.git",
+    )
+    with pytest.raises(RepositoryError, match="worktrees root"):
+        create_worktree(repository, "cycle")
 
 
 @pytest.mark.factory_zero

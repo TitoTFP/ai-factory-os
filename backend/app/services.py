@@ -39,6 +39,7 @@ from .provider import OpenAICompatibleProvider, ProviderConfig, ProviderError, P
 from .repository import (
     RepositoryError,
     check_runs,
+    check_runs_passed,
     cleanup_worktree,
     create_pull_request,
     create_worktree,
@@ -227,7 +228,13 @@ async def execute_repository_tool(
                 pull_number = int(arguments.get("number", 0))
             except (TypeError, ValueError) as exc:
                 raise RepositoryError("invalid pull request number") from exc
-            result = await merge_pull_request(repository, token or "", pull_number, str(arguments.get("head_sha") or cycle.head_sha or ""))
+            head_sha = str(arguments.get("head_sha") or cycle.head_sha or "")
+            if not head_sha:
+                raise PermissionError("merge requires a committed head SHA")
+            checks = await check_runs(repository, token or "", head_sha)
+            if not check_runs_passed(checks):
+                raise PermissionError("merge requires successful GitHub checks")
+            result = await merge_pull_request(repository, token or "", pull_number, head_sha)
         else:
             raise RepositoryError(f"unsupported repository operation: {operation}")
     record_event(
@@ -1273,8 +1280,7 @@ class Runtime:
             if lease_token is not None:
                 checks = await check_runs(repository, token, head_sha)
                 cycle.observation = {**cycle.observation, "pre_merge_checks": checks}
-                runs = [item for item in checks.get("check_runs", []) if isinstance(item, dict)]
-                if runs and any(item.get("status") != "completed" or item.get("conclusion") != "success" for item in runs):
+                if not check_runs_passed(checks):
                     cycle.observation = {**cycle.observation, "pre_merge_checks": checks}
                     raise RepositoryError("GitHub checks have not all passed")
             merge = {"merged": bool(pr.get("merged"))}
