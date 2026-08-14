@@ -1,3 +1,5 @@
+# pyright: reportMissingImports=false, reportAttributeAccessIssue=false
+
 from logging.config import fileConfig
 import sys
 from pathlib import Path
