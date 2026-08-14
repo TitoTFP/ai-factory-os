@@ -486,6 +486,10 @@ class Runtime:
                 stale_task.error = "requeued after worker restart or lease expiry"
                 record_event(db, factory_id, "task_recovered", {"task_id": stale_task.id})
             if stale_tasks:
+                stale_task_ids = [stale_task.id for stale_task in stale_tasks]
+                for agent in db.scalars(select(Agent).where(Agent.current_task_id.in_(stale_task_ids))):
+                    agent.status = "idle"
+                    agent.current_task_id = None
                 db.commit()
             task_query = (
                 select(Task)

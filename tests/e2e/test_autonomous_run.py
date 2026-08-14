@@ -299,6 +299,61 @@ def test_provider_tool_artifact_message_review_and_restart_round_trip(database, 
         db.close()
 
 
+def test_scheduler_worker_runs_provider_tool_task(database, monkeypatch):
+    db = SessionLocal()
+    try:
+        factory = Factory(owner_id="owner", name="Scheduler", mission="m", primary_objective="o", constraints=[])
+        db.add(factory)
+        db.flush()
+        space = Space(factory_id=factory.id, name="Work", purpose="Execute scheduled work")
+        db.add(space)
+        db.flush()
+        agent = Agent(factory_id=factory.id, space_id=space.id, name="Worker", role="Worker", objective="o")
+        task = Task(factory_id=factory.id, assignee_id=agent.id, title="Scheduled evidence", description="Use the workspace tool")
+        db.add_all([
+            agent,
+            task,
+            Tool(factory_id=factory.id, name="workspace", enabled=True, permissions=["read", "write"]),
+            FactoryRun(factory_id=factory.id, status="running"),
+        ])
+        db.commit()
+
+        class SchedulerProvider:
+            config = type("Config", (), {"model": "test-model"})()
+            last_response = ProviderResponse(
+                "",
+                total_tokens=2,
+                tool_calls=(ToolCall("call-1", "workspace", {"operation": "write", "path": "scheduled.md", "content": "scheduled"}),),
+            )
+
+            async def chat(self, messages, *, json_mode=False, tools=None):
+                return ""
+
+        monkeypatch.setattr("app.services.provider_for", lambda _db, _factory_id: SchedulerProvider())
+        runtime = Runtime()
+
+        async def run_until_done() -> None:
+            await runtime.start()
+            deadline = asyncio.get_running_loop().time() + 2
+            while asyncio.get_running_loop().time() < deadline:
+                with SessionLocal() as poll_db:
+                    current = poll_db.get(Task, task.id)
+                    if current is not None and current.status == "done":
+                        break
+                await asyncio.sleep(0.05)
+            await runtime.shutdown()
+
+        asyncio.run(run_until_done())
+        db.expire_all()
+        scheduled = db.get(Task, task.id)
+        assert scheduled is not None and scheduled.status == "done"
+        assert db.scalar(select(Artifact).where(Artifact.factory_id == factory.id, Artifact.name == "scheduled.md")) is not None
+        assert db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "task_started")) is not None
+        assert db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "task_completed")) is not None
+    finally:
+        db.close()
+
+
 def test_terminal_failure_escalates_and_retries(database):
     db = SessionLocal()
     try:
