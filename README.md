@@ -86,4 +86,11 @@ DATABASE_URL=sqlite:///./migration-check.db PYTHONPATH=backend .venv/bin/alembic
 git diff --check
 ```
 
+For an explicit PostgreSQL-backed test (use a disposable database; the test fixture resets its schema), set `TEST_DATABASE_URL`:
+
+```bash
+TEST_DATABASE_URL=postgresql+psycopg://factory_test:factory_test@localhost:5432/factory_test \
+PYTHONPATH=backend .venv/bin/python -m pytest -m postgres tests/integration/test_postgres.py -q
+```
+
 The backend test suite covers auth, OAuth callback behavior, tenant isolation across resource routes and runtime inbox recipients, Architect persistence and validation, criteria evaluation, typed message delivery/idempotency, task/artifact/event execution, workspace traversal, recovery at runtime startup, agent delegation/review messaging, retry escalation, reorganization, usage accounting, permission-derived model tools, and tool auditing. Frontend tests exercise onboarding, factory switching/creation, detail views, lifecycle controls, and WebSocket live status. Docker Compose is the supported PostgreSQL deployment path; if Docker is unavailable, run the local SQLite tests and migration check instead. The contract's Docker health and live-provider smoke checks require a Docker-capable host and configured external credentials; this repository cannot replace those environment gates with mocks.

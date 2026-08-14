@@ -24,6 +24,7 @@ testpaths = ["tests"]
 addopts = "-q"
 markers = [
   "live: requires OPENAI_API_KEY, OPENAI_BASE_URL, and OPENAI_MODEL",
+  "postgres: requires TEST_DATABASE_URL pointing to a disposable PostgreSQL database",
 ]
 
 [tool.setuptools.packages.find]

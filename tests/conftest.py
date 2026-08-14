@@ -3,8 +3,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 TEST_DB = Path(__file__).resolve().parents[1] / "test-suite.db"
-os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
+if TEST_DATABASE_URL:
+    os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+else:
+    os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["MASTER_KEY"] = "X2FHjTTGfPR5ixOXRbs5Op0PTJQfokcKdMrWYEQMoK8="
 os.environ["RUNTIME_POLL_SECONDS"] = "0.1"
@@ -22,7 +26,7 @@ def database():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
-    if TEST_DB.exists():
+    if not TEST_DATABASE_URL and TEST_DB.exists():
         TEST_DB.unlink()
 
 
