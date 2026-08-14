@@ -68,7 +68,8 @@ def test_workspace_boundary_and_tool_audit(database):
         db.add(space)
         db.flush()
         agent = Agent(factory_id=factory.id, space_id=space.id, name="A", role="R", objective="O")
-        db.add(agent)
+        other_agent = Agent(factory_id=factory.id, space_id=space.id, name="B", role="R", objective="O")
+        db.add_all([agent, other_agent])
         db.add(Tool(factory_id=factory.id, name="workspace", enabled=True, permissions=["read", "write"]))
         db.commit()
         try:
@@ -79,6 +80,13 @@ def test_workspace_boundary_and_tool_audit(database):
         directory = asyncio.run(execute_tool(db, factory, agent, None, "workspace", {"operation": "read", "path": "."}))
         assert directory["entries"] == []
         asyncio.run(execute_tool(db, factory, agent, None, "workspace", {"operation": "write", "path": "notes.md", "content": "hello"}))
+        other_directory = asyncio.run(execute_tool(db, factory, other_agent, None, "workspace", {"operation": "read", "path": "."}))
+        assert other_directory["entries"] == []
+        try:
+            safe_workspace_path(factory.id, f"../{agent.id}/notes.md", other_agent.id)
+            assert False, "agent workspace path should not cross into another agent"
+        except ValueError:
+            pass
         assert db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "tool_called")) is not None
     finally:
         db.close()

@@ -38,6 +38,8 @@ Or run the complete container stack:
 docker compose up --build
 ```
 
+The API mounts the named `factory_data` volume at `/app/data`. Workspace files are stored under `data/factories/<factory-id>/agents/<agent-id>/`, so agent workspaces survive API container recreation while remaining private to the agent; system-created files use the `_system` scope.
+
 - API: <http://localhost:8000>
 - API docs: <http://localhost:8000/docs>
 - UI: <http://localhost:5173>
@@ -85,6 +87,12 @@ Then run the deterministic checks:
 cd frontend && npm test -- --run && npm run build
 DATABASE_URL=sqlite:///./migration-check.db PYTHONPATH=backend .venv/bin/alembic upgrade head
 git diff --check
+```
+
+To verify the durable workspace mount with two recreated API containers, run the opt-in Docker test (it uses the Compose `factory_data` volume and cleans up its unique factory scope):
+
+```bash
+RUN_DOCKER_TESTS=1 PYTHONPATH=backend .venv/bin/python -m pytest -m docker tests/integration/test_workspace_persistence.py -q
 ```
 
 For an explicit PostgreSQL-backed test (use a disposable database; the test fixture resets its schema), set `TEST_DATABASE_URL`:

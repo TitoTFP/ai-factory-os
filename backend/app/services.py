@@ -260,20 +260,32 @@ async def architect_factory(db: Session, factory: Factory) -> dict[str, list[Any
     return {"spaces": spaces, "agents": agents, "goals": goals}
 
 
-def safe_workspace_path(factory_id: str, relative: str) -> Path:
-    relative = relative.strip().lstrip("/")
-    candidate = (WORKSPACE_ROOT / factory_id / relative).resolve()
-    root = (WORKSPACE_ROOT / factory_id).resolve()
-    if candidate != root and root not in candidate.parents:
+def _workspace_scope(factory_id: str, agent_id: str | None = None) -> Path:
+    base = WORKSPACE_ROOT.resolve()
+    factory_root = (base / factory_id).resolve()
+    if factory_root != base and base not in factory_root.parents:
+        raise ValueError("workspace path escapes workspace boundary")
+    scope_name = agent_id or "_system"
+    agent_root = (factory_root / "agents" / scope_name).resolve()
+    if factory_root not in agent_root.parents:
         raise ValueError("workspace path escapes factory boundary")
+    return agent_root
+
+
+def safe_workspace_path(factory_id: str, relative: str, agent_id: str | None = None) -> Path:
+    relative = relative.strip().lstrip("/")
+    root = _workspace_scope(factory_id, agent_id)
+    candidate = (root / relative).resolve()
+    if candidate != root and root not in candidate.parents:
+        raise ValueError("workspace path escapes agent boundary")
     return candidate
 
 
-def write_workspace_artifact(factory_id: str, name: str, content: str) -> str:
-    path = safe_workspace_path(factory_id, name)
+def write_workspace_artifact(factory_id: str, name: str, content: str, agent_id: str | None = None) -> str:
+    path = safe_workspace_path(factory_id, name, agent_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
-    return str(path.relative_to(WORKSPACE_ROOT / factory_id))
+    return str(path.relative_to(_workspace_scope(factory_id, agent_id)))
 
 
 def _redact(value: Any) -> Any:
@@ -299,7 +311,7 @@ def _persist_tool_artifact(
     if tool_name == "workspace":
         name = str(arguments.get("path", "artifact.txt"))
         content = str(arguments.get("content", ""))
-        uri = f"workspace://{name.lstrip('/')}"
+        uri = f"workspace://{agent.id if agent else '_system'}/{name.lstrip('/')}"
         kind = "file"
     elif tool_name in {"web_fetch", "http"}:
         name = str(arguments.get("artifact_name") or f"{tool_name}-{task.id if task else new_id()}.txt")[:240]
@@ -346,9 +358,10 @@ async def execute_tool(
         if operation not in tool.permissions:
             raise PermissionError(f"workspace operation is not allowed: {operation}")
         name = str(arguments.get("path", "artifact.txt"))
-        root = safe_workspace_path(factory.id, ".")
+        workspace_agent_id = agent.id if agent else None
+        root = safe_workspace_path(factory.id, ".", workspace_agent_id)
         root.mkdir(parents=True, exist_ok=True)
-        path = safe_workspace_path(factory.id, name)
+        path = safe_workspace_path(factory.id, name, workspace_agent_id)
         if operation == "write":
             content = str(arguments.get("content", ""))
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -738,7 +751,7 @@ class Runtime:
                 tool_result = {"content": text, "tool_calls": tool_results} if tool_results else {"content": text}
             filename = f"{task.id}.md"
             artifact_content = json.dumps(tool_result, ensure_ascii=False, indent=2) if not isinstance(tool_result.get("content"), str) else tool_result["content"]
-            relative = write_workspace_artifact(factory.id, filename, artifact_content)
+            relative = write_workspace_artifact(factory.id, filename, artifact_content, agent.id if agent else None)
             review_artifact_id = task.inputs.get("review_artifact_id")
             artifact = Artifact(
                 factory_id=factory.id,
@@ -748,7 +761,7 @@ class Runtime:
                 name=filename,
                 kind="review" if review_artifact_id else "text",
                 content=artifact_content,
-                uri=f"workspace://{relative}",
+                uri=f"workspace://{agent.id if agent else '_system'}/{relative}",
                 extra={
                     "tool": task.inputs.get("tool", "llm"),
                     **({"review_artifact_id": review_artifact_id} if review_artifact_id else {}),
