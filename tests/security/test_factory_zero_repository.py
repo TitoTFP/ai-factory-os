@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import subprocess
 import sys
 
 import pytest
 from sqlalchemy import select
 
-from app.repository import RepositoryError, create_worktree, ensure_checkout, read_file, run_configured_commands, safe_repository_path, write_file
+from app.repository import RepositoryError, create_worktree, ensure_checkout, read_file, repository_root, run_configured_commands, safe_repository_path, write_file
+from app.services import execute_repository_tool
 from app.security import decrypt_secret
 from app.db import SessionLocal
-from app.models import Repository, RepositoryCredential
+from app.models import Factory, ImprovementCycle, Repository, RepositoryCredential
 
 
 @pytest.mark.factory_zero
@@ -89,6 +91,62 @@ def test_worktrees_root_symlink_is_rejected_before_git_worktree_add(tmp_path, mo
     )
     with pytest.raises(RepositoryError, match="worktrees root"):
         create_worktree(repository, "cycle")
+
+
+@pytest.mark.factory_zero
+
+def test_generic_merge_tool_requires_successful_github_checks(database, monkeypatch):
+    db = SessionLocal()
+    factory = Factory(owner_id="u", name="Merge Gate", mission="m", primary_objective="o", constraints=[])
+    db.add(factory)
+    db.flush()
+    repository = Repository(
+        factory_id=factory.id,
+        owner="TitoTFP",
+        name="ai-factory-os",
+        remote_url="https://github.com/TitoTFP/ai-factory-os.git",
+    )
+    db.add(repository)
+    db.flush()
+    credential = RepositoryCredential(
+        factory_id=factory.id,
+        repository_id=repository.id,
+        provider="github",
+        encrypted_token="encrypted",
+        permissions=["merge"],
+    )
+    cycle = ImprovementCycle(
+        factory_id=factory.id,
+        repository_id=repository.id,
+        objective="merge",
+        phase="merge",
+        head_sha="h" * 40,
+        verification={"passed": True},
+        review={"approved": True},
+    )
+    db.add_all([credential, cycle])
+    db.commit()
+    worktree = repository_root(factory.id, repository.id) / "worktrees" / cycle.id
+    worktree.mkdir(parents=True)
+    monkeypatch.setattr("app.services.repository_token_for", lambda *_args, **_kwargs: "token")
+
+    async def failed_checks(*_args, **_kwargs):
+        return {"total_count": 1, "check_runs": [{"status": "completed", "conclusion": "failure"}]}
+
+    async def unexpected_merge(*_args, **_kwargs):
+        raise AssertionError("merge must not run when checks fail")
+
+    monkeypatch.setattr("app.services.check_runs", failed_checks)
+    monkeypatch.setattr("app.services.merge_pull_request", unexpected_merge)
+    with pytest.raises(PermissionError, match="successful GitHub checks"):
+        asyncio.run(execute_repository_tool(
+            db,
+            factory,
+            None,
+            None,
+            {"operation": "merge", "repository_id": repository.id, "worktree_path": str(worktree), "improvement_cycle_id": cycle.id, "number": 1, "head_sha": cycle.head_sha},
+        ))
+    db.close()
 
 
 @pytest.mark.factory_zero
