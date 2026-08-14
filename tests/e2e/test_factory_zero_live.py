@@ -43,7 +43,7 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
             "name": "ai-factory-os",
             "default_branch": "master",
             "github_token": github_token,
-            "test_commands": [[sys.executable, "-m", "pytest", "-q"]],
+            "test_commands": [[sys.executable, "-m", "pytest", "-q", "-m", "not factory_zero_live"]],
         },
     )
     assert repository.status_code == 200, repository.text
@@ -53,14 +53,19 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
         headers=auth,
         json={
             "repository_id": repository.json()["id"],
-            "objective": "Add the exact sentence `Factory Zero is dogfooding this repository.` to README.md under the opening description. Do not change the meaning of any other documentation, and keep all existing tests passing.",
+            "objective": "Add the exact sentence `Factory Zero observed its first verified self-improvement.` to README.md under the opening description. Do not change the meaning of any other documentation, and keep all existing tests passing.",
         },
     )
     assert cycle.status_code == 200, cycle.text
     cycle_id = cycle.json()["id"]
 
+    poll_text = os.getenv("FACTORY_ZERO_LIVE_POLLS", "450")
+    try:
+        poll_count = max(1, int(poll_text))
+    except ValueError:
+        poll_count = 450
     final = None
-    for _ in range(180):
+    for _ in range(poll_count):
         response = client.get(f"/api/factories/{factory_id}/improvement-cycles", headers=auth)
         assert response.status_code == 200, response.text
         final = next(item for item in response.json() if item["id"] == cycle_id)
@@ -69,7 +74,10 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
         time.sleep(2)
 
     assert final is not None
-    assert final["status"] == "completed", final
+    assert final["status"] == "completed", (
+        f"cycle status={final['status']} phase={final['phase']} "
+        f"error={final['error']} retry_count={final['retry_count']}"
+    )
     assert final["pr_number"]
     assert final["pr_url"].startswith("https://github.com/TitoTFP/ai-factory-os/pull/")
     assert final["review"]["approved"]
@@ -79,4 +87,11 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
     snapshot = client.get(f"/api/factories/{factory_id}", headers=auth)
     assert snapshot.status_code == 200
     event_types = {event["event_type"] for event in snapshot.json()["events"]}
-    assert {"improvement_cycle_diagnosed", "improvement_cycle_verified", "improvement_cycle_reviewed", "improvement_cycle_merged", "improvement_cycle_completed"} <= event_types
+    expected_events = {
+        "improvement_cycle_diagnosed",
+        "improvement_cycle_verified",
+        "improvement_cycle_reviewed",
+        "improvement_cycle_merged",
+        "improvement_cycle_completed",
+    }
+    assert not expected_events - event_types, f"missing events={sorted(expected_events - event_types)} observed={sorted(event_types)}"

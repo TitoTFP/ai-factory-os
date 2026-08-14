@@ -5,9 +5,10 @@ import json
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Agent, Factory, ImprovementCycle, Repository, Space, now
+from app.models import Agent, Event, Factory, ImprovementCycle, Repository, Space, now
 from app.provider import ProviderResponse, ToolCall
 from app.services import Runtime
 
@@ -124,6 +125,8 @@ def test_factory_zero_cycle_is_durable_and_requires_independent_review(database,
     assert cycle.review["approved"]
     assert cycle.observation["merged"]
     assert (worktree / "README.md").read_text(encoding="utf-8") == "after"
+    event_types = {event.event_type for event in db.scalars(select(Event).where(Event.factory_id == factory.id))}
+    assert {"improvement_cycle_diagnosed", "improvement_cycle_verified", "improvement_cycle_reviewed", "improvement_cycle_merged", "improvement_cycle_completed"} <= event_types
     db.close()
 
 

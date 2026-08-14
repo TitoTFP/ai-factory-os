@@ -957,13 +957,14 @@ class Runtime:
                 "content": (
                     f"You are {agent.name}, the Factory Zero {agent.role}. Work only on the configured AI Factory OS repository. "
                     f"The isolated worktree is {cycle.worktree_path}. Repository id: {cycle.repository_id}. Cycle id: {cycle.id}. "
-                    "Never invent verification evidence. Keep changes small and explain the exact files and commands used."
+                    "Never invent verification evidence. Keep changes small and explain the exact files and commands used. "
+                    "After the necessary repository operations, stop using tools and return the requested JSON immediately."
                 ),
             },
             {"role": "user", "content": instruction},
         ]
         tools = self._cycle_tool_schema(write)
-        for _ in range(8):
+        for _ in range(16):
             try:
                 text = await provider.chat(messages, json_mode=json_mode and not tools, tools=tools or None)
             except TypeError as exc:

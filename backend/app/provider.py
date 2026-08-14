@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -66,12 +67,24 @@ class OpenAICompatibleProvider:
         owns_client = self.client is None
         client = self.client or httpx.AsyncClient(timeout=90)
         try:
-            response = await client.post(
-                self.config.base_url.rstrip("/") + "/chat/completions",
-                headers={"Authorization": f"Bearer {self.config.api_key}"},
-                json=payload,
-            )
-            response.raise_for_status()
+            for attempt in range(3):
+                try:
+                    response = await client.post(
+                        self.config.base_url.rstrip("/") + "/chat/completions",
+                        headers={"Authorization": f"Bearer {self.config.api_key}"},
+                        json=payload,
+                    )
+                    if response.status_code in {408, 429} or response.status_code >= 500:
+                        if attempt == 2:
+                            response.raise_for_status()
+                        await asyncio.sleep(2**attempt)
+                        continue
+                    response.raise_for_status()
+                    break
+                except httpx.RequestError as exc:
+                    if attempt == 2:
+                        raise exc
+                    await asyncio.sleep(2**attempt)
             try:
                 data = response.json()
                 usage = data.get("usage") or {}

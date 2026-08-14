@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import re
 import shutil
@@ -76,7 +77,8 @@ def _git_env(token: str | None = None) -> dict[str, str]:
         # Keep the token out of argv, URLs, logs, and audit payloads.
         env["GIT_CONFIG_COUNT"] = "1"
         env["GIT_CONFIG_KEY_0"] = "http.extraHeader"
-        env["GIT_CONFIG_VALUE_0"] = f"AUTHORIZATION: bearer {token}"
+        encoded = base64.b64encode(f"x-access-token:{token}".encode("utf-8")).decode("ascii")
+        env["GIT_CONFIG_VALUE_0"] = f"AUTHORIZATION: Basic {encoded}"
     return env
 
 
