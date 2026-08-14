@@ -4,7 +4,7 @@
 >
 > Give a factory a mission. Let specialized agents research, build, review, and report—while humans keep the keys, the budget, and the stop button.
 
-Factory Zero is dogfooding this repository. Factory Zero observed its first verified self-improvement. Factory Zero keeps an auditable trail for every self-improvement.
+Factory Zero is dogfooding this repository. Factory Zero observed its first verified self-improvement. Factory Zero keeps an auditable trail for every self-improvement. Factory Zero hardened its lease and merge recovery controls.
 
 AI Factory OS is a durable, multi-tenant application for running autonomous agent factories. It combines a FastAPI service, React Factory Floor, PostgreSQL persistence, an OpenAI-compatible provider, encrypted per-factory credentials, scoped tools, lifecycle controls, and an auditable event stream.
 
