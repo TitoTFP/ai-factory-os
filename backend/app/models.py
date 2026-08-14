@@ -88,6 +88,69 @@ class FactoryCredential(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
 
 
+class Repository(Base):
+    __tablename__ = "repositories"
+    __table_args__ = (UniqueConstraint("factory_id", "provider", "owner", "name", name="uq_factory_repository"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    factory_id: Mapped[str] = mapped_column(ForeignKey("factories.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(32), default="github")
+    owner: Mapped[str] = mapped_column(String(160))
+    name: Mapped[str] = mapped_column(String(160))
+    remote_url: Mapped[str] = mapped_column(String(1024))
+    default_branch: Mapped[str] = mapped_column(String(160), default="master")
+    test_commands: Mapped[list[Any]] = mapped_column(JSON, default=json_list)
+    build_commands: Mapped[list[Any]] = mapped_column(JSON, default=json_list)
+    lint_commands: Mapped[list[Any]] = mapped_column(JSON, default=json_list)
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class RepositoryCredential(Base):
+    __tablename__ = "repository_credentials"
+    __table_args__ = (UniqueConstraint("repository_id", "provider", name="uq_repository_credential_provider"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    factory_id: Mapped[str] = mapped_column(ForeignKey("factories.id", ondelete="CASCADE"), index=True)
+    repository_id: Mapped[str] = mapped_column(ForeignKey("repositories.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(32), default="github")
+    encrypted_token: Mapped[str] = mapped_column(Text)
+    permissions: Mapped[list[Any]] = mapped_column(JSON, default=json_list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class ImprovementCycle(Base):
+    __tablename__ = "improvement_cycles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    factory_id: Mapped[str] = mapped_column(ForeignKey("factories.id", ondelete="CASCADE"), index=True)
+    repository_id: Mapped[str] = mapped_column(ForeignKey("repositories.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    phase: Mapped[str] = mapped_column(String(32), default="discover", index=True)
+    objective: Mapped[str] = mapped_column(Text)
+    branch_name: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    worktree_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    base_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    head_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    pr_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pr_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    author_agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True)
+    reviewer_agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True)
+    proposal: Mapped[dict[str, Any]] = mapped_column(JSON, default=json_dict)
+    verification: Mapped[dict[str, Any]] = mapped_column(JSON, default=json_dict)
+    review: Mapped[dict[str, Any]] = mapped_column(JSON, default=json_dict)
+    observation: Mapped[dict[str, Any]] = mapped_column(JSON, default=json_dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
 class Space(Base):
     __tablename__ = "spaces"
 

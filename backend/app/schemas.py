@@ -87,6 +87,73 @@ class CredentialUpdate(BaseModel):
     permissions: list[str] = Field(default_factory=list)
 
 
+class RepositoryCreate(BaseModel):
+    provider: Literal["github"] = "github"
+    owner: str = Field(min_length=1, max_length=160)
+    name: str = Field(min_length=1, max_length=160)
+    default_branch: str = Field(default="master", min_length=1, max_length=160)
+    remote_url: str | None = None
+    test_commands: list[list[str]] = Field(default_factory=list)
+    build_commands: list[list[str]] = Field(default_factory=list)
+    lint_commands: list[list[str]] = Field(default_factory=list)
+    github_token: SecretStr | None = None
+
+
+class RepositoryCredentialUpdate(BaseModel):
+    token: SecretStr
+    permissions: list[str] = Field(default_factory=lambda: ["read", "write", "pull_request", "merge"])
+
+
+class RepositoryResponse(APIModel):
+    id: str
+    factory_id: str
+    provider: str
+    owner: str
+    name: str
+    remote_url: str
+    default_branch: str
+    test_commands: list[Any]
+    build_commands: list[Any]
+    lint_commands: list[Any]
+    status: str
+    created_at: Any
+    updated_at: Any
+
+
+class ImprovementCycleCreate(BaseModel):
+    repository_id: str
+    objective: str = Field(min_length=1)
+    author_agent_id: str | None = None
+    reviewer_agent_id: str | None = None
+
+
+class ImprovementCycleResponse(APIModel):
+    id: str
+    factory_id: str
+    repository_id: str
+    status: str
+    phase: str
+    objective: str
+    branch_name: str | None
+    worktree_path: str | None
+    base_sha: str | None
+    head_sha: str | None
+    pr_number: int | None
+    pr_url: str | None
+    author_agent_id: str | None
+    reviewer_agent_id: str | None
+    proposal: dict[str, Any]
+    verification: dict[str, Any]
+    review: dict[str, Any]
+    observation: dict[str, Any]
+    error: str | None
+    retry_count: int
+    started_at: Any
+    completed_at: Any
+    created_at: Any
+    updated_at: Any
+
+
 class SpaceResponse(APIModel):
     id: str
     factory_id: str
@@ -236,3 +303,5 @@ class FactorySnapshot(BaseModel):
     events: list[EventResponse]
     run: RunResponse | None
     usage: UsageResponse
+    repositories: list[RepositoryResponse] = Field(default_factory=list)
+    improvement_cycles: list[ImprovementCycleResponse] = Field(default_factory=list)

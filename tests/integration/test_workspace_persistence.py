@@ -14,8 +14,6 @@ pytestmark = pytest.mark.docker
 
 def _compose_python(code: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    environment.setdefault("SECRET_KEY", "docker-workspace-test-secret-key-32-chars")
-    environment.setdefault("MASTER_KEY", "X2FHjTTGfPR5ixOXRbs5Op0PTJQfokcKdMrWYEQMoK8=")
     return subprocess.run(
         ["docker", "compose", "run", "--rm", "--no-deps", "api", "python", "-c", code],
         cwd=ROOT,

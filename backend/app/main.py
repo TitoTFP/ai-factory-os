@@ -17,7 +17,7 @@ from . import models
 from .config import settings
 from .db import Base, SessionLocal, engine, get_db
 from .deps import current_user, owned_factory
-from .models import Agent, Artifact, Event, Factory, FactoryCredential, FactoryRun, Goal, Message, OAuthState, Space, Task, Usage, User, now
+from .models import Agent, Artifact, Event, Factory, FactoryCredential, FactoryRun, Goal, ImprovementCycle, Message, OAuthState, Repository, RepositoryCredential, Space, Task, Usage, User, now
 from .schemas import (
     AgentResponse,
     ArchitectResponse,
@@ -42,11 +42,17 @@ from .schemas import (
     MessageCreate,
     OAuthStart,
     OrganizationChange,
+    RepositoryCreate,
+    RepositoryCredentialUpdate,
+    RepositoryResponse,
+    ImprovementCycleCreate,
+    ImprovementCycleResponse,
 )
 from .oauth import OAuthError, verify_oauth_code
 from .security import create_token, decode_token, encrypt_secret, hash_password, new_oauth_state, utc_now, verify_password
 from .network import validate_external_url
-from .services import architect_factory, credential_for, record_event, runtime
+from .repository import RepositoryError, validate_github_url
+from .services import architect_factory, credential_for, record_event, repository_for, runtime
 
 
 @asynccontextmanager
@@ -133,6 +139,8 @@ def _snapshot(db: Session, factory: Factory) -> FactorySnapshot:
         events=[EventResponse.model_validate(x) for x in db.scalars(where(Event).order_by(Event.created_at.desc()).limit(200))],
         run=RunResponse.model_validate(run) if run else None,
         usage=usage,
+        repositories=[RepositoryResponse.model_validate(x) for x in db.scalars(where(Repository))],
+        improvement_cycles=[ImprovementCycleResponse.model_validate(x) for x in db.scalars(where(ImprovementCycle).order_by(ImprovementCycle.created_at.desc()).limit(100))],
     )
 
 
@@ -324,6 +332,9 @@ def update_credentials(factory_id: str, payload: CredentialUpdate, db: Session =
                 "web_fetch": ["GET"] if tool.name in credential.permissions else [],
                 "http": [method for method in ("GET", "POST", "PUT", "DELETE") if tool.name in credential.permissions],
             }[tool.name]
+        elif tool.name == "repository":
+            tool.enabled = "repository" in credential.permissions
+            tool.permissions = ["read", "write", "pull_request", "merge"] if tool.enabled else []
     record_event(
         db,
         factory.id,
@@ -333,6 +344,111 @@ def update_credentials(factory_id: str, payload: CredentialUpdate, db: Session =
         actor_id=user.id,
     )
     db.commit()
+
+
+@app.post("/api/factories/{factory_id}/repositories", response_model=RepositoryResponse)
+def create_repository(factory_id: str, payload: RepositoryCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> RepositoryResponse:
+    factory = owned_factory(factory_id, db, user)
+    owner = payload.owner.strip()
+    name = payload.name.strip()
+    remote_url = payload.remote_url or f"https://github.com/{owner}/{name}.git"
+    try:
+        validate_github_url(remote_url, owner, name)
+    except RepositoryError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    repository = Repository(
+        factory_id=factory.id,
+        provider=payload.provider,
+        owner=owner,
+        name=name,
+        remote_url=remote_url,
+        default_branch=payload.default_branch.strip(),
+        test_commands=payload.test_commands or [["python", "-m", "pytest", "-q"]],
+        build_commands=payload.build_commands,
+        lint_commands=payload.lint_commands,
+    )
+    db.add(repository)
+    db.flush()
+    if payload.github_token:
+        try:
+            encrypted = encrypt_secret(payload.github_token.get_secret_value())
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        db.add(RepositoryCredential(
+            factory_id=factory.id,
+            repository_id=repository.id,
+            provider="github",
+            encrypted_token=encrypted,
+            permissions=["read", "write", "pull_request", "merge"],
+        ))
+    factory_credential = credential_for(db, factory.id)
+    if factory_credential and "repository" in (factory_credential.permissions or []):
+        tool = db.scalar(select(models.Tool).where(models.Tool.factory_id == factory.id, models.Tool.name == "repository"))
+        if not tool:
+            db.add(models.Tool(factory_id=factory.id, name="repository", description="Inspect and modify the configured repository worktree through audited operations.", enabled=True, permissions=["read", "write", "pull_request", "merge"]))
+    record_event(db, factory.id, "repository_registered", {"repository_id": repository.id, "provider": repository.provider, "owner": owner, "name": name, "default_branch": repository.default_branch}, actor_type="user", actor_id=user.id)
+    db.commit()
+    db.refresh(repository)
+    return RepositoryResponse.model_validate(repository)
+
+
+@app.get("/api/factories/{factory_id}/repositories", response_model=list[RepositoryResponse])
+def list_repositories(factory_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[RepositoryResponse]:
+    factory = owned_factory(factory_id, db, user)
+    return [RepositoryResponse.model_validate(repository) for repository in db.scalars(select(Repository).where(Repository.factory_id == factory.id).order_by(Repository.created_at))]
+
+
+@app.put("/api/factories/{factory_id}/repositories/{repository_id}/credentials", response_model=None)
+def update_repository_credentials(factory_id: str, repository_id: str, payload: RepositoryCredentialUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
+    factory = owned_factory(factory_id, db, user)
+    repository = db.scalar(select(Repository).where(Repository.id == repository_id, Repository.factory_id == factory.id))
+    if not repository:
+        raise HTTPException(status_code=404, detail="repository not found")
+    try:
+        encrypted = encrypt_secret(payload.token.get_secret_value())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    credential = db.scalar(select(RepositoryCredential).where(RepositoryCredential.repository_id == repository.id, RepositoryCredential.provider == "github"))
+    if not credential:
+        credential = RepositoryCredential(factory_id=factory.id, repository_id=repository.id, provider="github")
+        db.add(credential)
+    credential.encrypted_token = encrypted
+    credential.permissions = sorted(set(payload.permissions))
+    record_event(db, factory.id, "repository_credentials_updated", {"repository_id": repository.id, "permissions": credential.permissions}, actor_type="user", actor_id=user.id)
+    db.commit()
+
+
+@app.post("/api/factories/{factory_id}/improvement-cycles", response_model=ImprovementCycleResponse)
+def create_improvement_cycle(factory_id: str, payload: ImprovementCycleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ImprovementCycleResponse:
+    factory = owned_factory(factory_id, db, user)
+    factory_credential = credential_for(db, factory.id)
+    if not factory_credential or "repository" not in (factory_credential.permissions or []):
+        raise HTTPException(status_code=403, detail="repository capability is not enabled for this factory")
+    repository = db.scalar(select(Repository).where(Repository.id == payload.repository_id, Repository.factory_id == factory.id))
+    if not repository:
+        raise HTTPException(status_code=404, detail="repository not found")
+    author = db.scalar(select(Agent).where(Agent.id == payload.author_agent_id, Agent.factory_id == factory.id)) if payload.author_agent_id else db.scalar(select(Agent).where(Agent.factory_id == factory.id, Agent.status != "hibernated").order_by(Agent.created_at))
+    reviewer = db.scalar(select(Agent).where(Agent.id == payload.reviewer_agent_id, Agent.factory_id == factory.id)) if payload.reviewer_agent_id else db.scalar(select(Agent).where(Agent.factory_id == factory.id, Agent.status != "hibernated", Agent.id != (author.id if author else "")).order_by(Agent.created_at))
+    if not author or not reviewer or author.id == reviewer.id:
+        raise HTTPException(status_code=422, detail="an author and independent reviewer agent are required")
+    cycle = ImprovementCycle(factory_id=factory.id, repository_id=repository.id, objective=payload.objective.strip(), author_agent_id=author.id, reviewer_agent_id=reviewer.id)
+    db.add(cycle)
+    run = db.scalar(select(FactoryRun).where(FactoryRun.factory_id == factory.id, FactoryRun.status == "running"))
+    if not run:
+        run = FactoryRun(factory_id=factory.id, status="running", started_at=now())
+        db.add(run)
+    factory.status = "running"
+    db.flush()
+    record_event(db, factory.id, "improvement_cycle_queued", {"cycle_id": cycle.id, "repository_id": repository.id, "author_agent_id": author.id, "reviewer_agent_id": reviewer.id}, actor_type="user", actor_id=user.id)
+    db.commit()
+    db.refresh(cycle)
+    return ImprovementCycleResponse.model_validate(cycle)
+
+
+@app.get("/api/factories/{factory_id}/improvement-cycles", response_model=list[ImprovementCycleResponse])
+def list_improvement_cycles(factory_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ImprovementCycleResponse]:
+    factory = owned_factory(factory_id, db, user)
+    return [ImprovementCycleResponse.model_validate(cycle) for cycle in db.scalars(select(ImprovementCycle).where(ImprovementCycle.factory_id == factory.id).order_by(ImprovementCycle.created_at.desc()))]
 
 
 @app.post("/api/factories/{factory_id}/resume", response_model=RunResponse)

@@ -24,6 +24,9 @@ from .models import (
     FactoryCredential,
     FactoryRun,
     Goal,
+    ImprovementCycle,
+    Repository,
+    RepositoryCredential,
     Message,
     Space,
     Usage,
@@ -33,6 +36,26 @@ from .models import (
     new_id,
 )
 from .provider import OpenAICompatibleProvider, ProviderConfig, ProviderError, ProviderResponse
+from .repository import (
+    RepositoryError,
+    check_runs,
+    cleanup_worktree,
+    create_pull_request,
+    create_worktree,
+    ensure_checkout,
+    git_commit,
+    git_diff,
+    git_status,
+    merge_pull_request,
+    pull_request,
+    push_branch,
+    read_file,
+    repository_root,
+    run_configured_commands,
+    search_files,
+    safe_repository_path,
+    write_file,
+)
 from .security import decrypt_secret
 
 
@@ -80,6 +103,136 @@ def provider_for(db: Session, factory_id: str) -> OpenAICompatibleProvider:
     except (ValueError, TypeError, InvalidToken) as exc:
         raise ProviderError("factory provider credential could not be decrypted") from exc
     return OpenAICompatibleProvider(ProviderConfig(credential.base_url, credential.model, api_key))
+
+
+def repository_for(db: Session, factory_id: str, repository_id: str) -> Repository:
+    repository = db.scalar(select(Repository).where(Repository.id == repository_id, Repository.factory_id == factory_id))
+    if not repository:
+        raise RepositoryError("repository does not belong to this factory")
+    return repository
+
+
+def repository_token_for(db: Session, factory_id: str, repository_id: str) -> str | None:
+    credential = db.scalar(
+        select(RepositoryCredential).where(
+            RepositoryCredential.factory_id == factory_id,
+            RepositoryCredential.repository_id == repository_id,
+            RepositoryCredential.provider == "github",
+        )
+    )
+    if not credential:
+        return None
+    try:
+        return decrypt_secret(credential.encrypted_token)
+    except (ValueError, TypeError, InvalidToken) as exc:
+        raise RepositoryError("repository credential could not be decrypted") from exc
+
+
+def _repository_permission(operation: str) -> str:
+    if operation in {"checkout", "read", "search", "status", "diff"}:
+        return "read"
+    if operation in {"worktree", "write", "commit", "verify", "test", "build", "lint"}:
+        return "write"
+    if operation in {"push", "create_pr"}:
+        return "pull_request"
+    if operation == "merge":
+        return "merge"
+    raise RepositoryError(f"unsupported repository operation: {operation}")
+
+
+async def execute_repository_tool(
+    db: Session,
+    factory: Factory,
+    agent: Agent | None,
+    task: Task | None,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    operation = str(arguments.get("operation", "status"))
+    repository_id = str(arguments.get("repository_id") or (task.inputs.get("repository_id") if task else ""))
+    repository = repository_for(db, factory.id, repository_id)
+    credential = db.scalar(
+        select(RepositoryCredential).where(
+            RepositoryCredential.factory_id == factory.id,
+            RepositoryCredential.repository_id == repository.id,
+            RepositoryCredential.provider == "github",
+        )
+    )
+    required = _repository_permission(operation)
+    if credential and required not in (credential.permissions or []):
+        raise PermissionError(f"repository operation is not allowed: {operation}")
+    if operation in {"push", "create_pr", "merge"} and not credential:
+        raise RepositoryError("repository credential is required for this operation")
+    token = repository_token_for(db, factory.id, repository.id)
+    worktree = str(arguments.get("worktree_path") or (task.inputs.get("worktree_path") if task else ""))
+    if operation == "checkout":
+        checkout = ensure_checkout(repository, token)
+        result = {"repository_id": repository.id, "ready": True, "path": str(checkout)}
+    elif operation == "worktree":
+        cycle_id = str(arguments.get("cycle_id") or (task.inputs.get("improvement_cycle_id") if task else ""))
+        if not cycle_id:
+            raise RepositoryError("cycle_id is required to create a worktree")
+        path, branch, base_sha = create_worktree(repository, cycle_id, token)
+        result = {"worktree_path": str(path), "branch": branch, "base_sha": base_sha}
+    elif not worktree:
+        raise RepositoryError("worktree_path is required for this repository operation")
+    else:
+        worktree_root = (repository_root(factory.id, repository.id) / "worktrees").resolve()
+        resolved_worktree = Path(worktree).resolve()
+        if worktree_root not in resolved_worktree.parents:
+            raise RepositoryError("repository operation escaped the worktree boundary")
+        cycle_scope = str(arguments.get("improvement_cycle_id") or (task.inputs.get("improvement_cycle_id") if task else ""))
+        if cycle_scope and resolved_worktree.name != cycle_scope:
+            raise RepositoryError("repository operation targeted a different improvement cycle")
+        if operation == "read":
+            result = read_file(worktree, str(arguments.get("path", "README.md")))
+        elif operation == "search":
+            result = search_files(worktree, str(arguments.get("query", "")))
+        elif operation == "write":
+            result = write_file(worktree, str(arguments.get("path", "")), str(arguments.get("content", "")))
+        elif operation == "status":
+            result = git_status(worktree)
+        elif operation == "diff":
+            result = git_diff(worktree)
+        elif operation == "commit":
+            result = {"head_sha": git_commit(worktree, str(arguments.get("message", "Factory Zero improvement")))}
+        elif operation in {"verify", "test", "build", "lint"}:
+            kind = str(arguments.get("kind", operation if operation in {"test", "build", "lint"} else "test"))
+            result = run_configured_commands(repository, worktree, kind)
+        elif operation == "push":
+            branch = str(arguments.get("branch", ""))
+            if not branch:
+                raise RepositoryError("branch is required to push a repository worktree")
+            push_branch(worktree, branch, token or "")
+            result = {"branch": branch, "pushed": True}
+        elif operation == "create_pr":
+            branch = str(arguments.get("branch", ""))
+            if not branch:
+                raise RepositoryError("branch is required to create a pull request")
+            result = await create_pull_request(repository, token or "", branch, str(arguments.get("title", "Factory Zero improvement")), str(arguments.get("body", "")))
+        elif operation == "merge":
+            cycle_id = str(arguments.get("improvement_cycle_id") or (task.inputs.get("improvement_cycle_id") if task else ""))
+            cycle = db.scalar(select(ImprovementCycle).where(ImprovementCycle.id == cycle_id, ImprovementCycle.factory_id == factory.id)) if cycle_id else None
+            if not cycle or cycle.phase != "merge":
+                raise PermissionError("merge requires an active improvement cycle")
+            if not bool(cycle.verification.get("passed")) or not bool(cycle.review.get("approved")):
+                raise PermissionError("merge requires verified work and an independent approved review")
+            try:
+                pull_number = int(arguments.get("number", 0))
+            except (TypeError, ValueError) as exc:
+                raise RepositoryError("invalid pull request number") from exc
+            result = await merge_pull_request(repository, token or "", pull_number, str(arguments.get("head_sha") or cycle.head_sha or ""))
+        else:
+            raise RepositoryError(f"unsupported repository operation: {operation}")
+    record_event(
+        db,
+        factory.id,
+        "repository_tool_called",
+        {"repository_id": repository.id, "operation": operation, "result": {key: value for key, value in result.items() if key not in {"content", "diff", "output"}}},
+        actor_type="agent" if agent else "system",
+        actor_id=agent.id if agent else "system",
+    )
+    db.commit()
+    return result
 
 
 def _json_payload(text: str) -> dict[str, Any]:
@@ -236,6 +389,15 @@ async def architect_factory(db: Session, factory: Factory) -> dict[str, list[Any
             description="Perform generic HTTP requests using this factory's credential scope.",
             enabled="http" in allowed_tools,
             permissions=["GET", "POST", "PUT", "DELETE"],
+        )
+    )
+    db.add(
+        Tool(
+            factory_id=factory.id,
+            name="repository",
+            description="Inspect and modify the configured repository worktree through audited operations.",
+            enabled="repository" in allowed_tools,
+            permissions=["read", "write", "pull_request", "merge"],
         )
     )
     kickoff = Task(
@@ -397,6 +559,8 @@ async def execute_tool(
         async with httpx.AsyncClient(timeout=20, follow_redirects=False, trust_env=False, transport=transport) as client:
             response = await client.request(method, url, json=arguments.get("body"))
         result = {"status_code": response.status_code, "url": str(response.url), "body": response.text[:200_000]}
+    elif tool_name == "repository":
+        result = await execute_repository_tool(db, factory, agent, task, arguments)
     else:
         raise ValueError(f"unknown tool: {tool_name}")
     _persist_tool_artifact(db, factory, agent, task, tool_name, arguments, result)
@@ -436,6 +600,17 @@ class Runtime:
                 for agent in db.scalars(select(Agent).where(Agent.current_task_id.in_(stale_task_ids))):
                     agent.status = "idle"
                     agent.current_task_id = None
+                db.commit()
+            stale_cycles = list(db.scalars(select(ImprovementCycle).where(
+                ImprovementCycle.status == "running",
+                or_(ImprovementCycle.lease_until < current_time, and_(ImprovementCycle.lease_until.is_(None), ImprovementCycle.updated_at < stale_before)),
+            )))
+            for cycle in stale_cycles:
+                cycle.status = "queued"
+                cycle.lease_until = None
+                cycle.error = "requeued after worker restart or lease expiry"
+                record_event(db, cycle.factory_id, "improvement_cycle_recovered", {"cycle_id": cycle.id, "phase": cycle.phase})
+            if stale_cycles:
                 db.commit()
             orphaned_agents = list(db.scalars(select(Agent).where(Agent.status == "working", Agent.current_task_id.is_not(None))))
             for agent in orphaned_agents:
@@ -490,14 +665,14 @@ class Runtime:
                         await self.process_factory(factory_id)
                     except Exception as exc:
                         await self._record_runtime_error(factory_id, exc)
-            except Exception:
+            except Exception as exc:
                 # A database discovery failure must not kill the daemon; the next
                 # poll retries it. Per-factory failures are persisted above.
-                pass
+                await asyncio.sleep(0)
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=settings.runtime_poll_seconds)
             except TimeoutError:
-                pass
+                await asyncio.sleep(0)
 
     async def process_factory(self, factory_id: str) -> None:
         db = SessionLocal()
@@ -537,6 +712,8 @@ class Runtime:
                 db.commit()
             if task is not None:
                 await self._process_task(db, factory, task)
+            elif await self._process_improvement_cycle(db, factory):
+                return
             else:
                 await self._evaluate(db, factory, run)
         finally:
@@ -648,6 +825,32 @@ class Runtime:
                 if not methods:
                     continue
                 properties = {"url": {"type": "string"}, "artifact_name": {"type": "string"}}
+            elif tool.name == "repository":
+                operations = [
+                    operation for operation in (
+                        "checkout", "worktree", "read", "search", "write", "status", "diff",
+                        "commit", "test", "build", "lint", "push", "create_pr", "merge",
+                    ) if _repository_permission(operation) in tool.permissions
+                ]
+                if not operations:
+                    continue
+                properties = {
+                    "operation": {"type": "string", "enum": operations},
+                    "repository_id": {"type": "string"},
+                    "worktree_path": {"type": "string"},
+                    "cycle_id": {"type": "string"},
+                    "path": {"type": "string"},
+                    "query": {"type": "string"},
+                    "content": {"type": "string"},
+                    "kind": {"type": "string", "enum": ["test", "build", "lint"]},
+                    "message": {"type": "string"},
+                    "branch": {"type": "string"},
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "number": {"type": "integer"},
+                    "head_sha": {"type": "string"},
+                    "improvement_cycle_id": {"type": "string"},
+                }
             else:
                 methods = [method for method in ("GET", "POST", "PUT", "DELETE") if method in tool.permissions]
                 if not methods:
@@ -662,7 +865,7 @@ class Runtime:
         return tools
 
     async def _model_action(self, db: Session, factory: Factory, agent: Agent | None, task: Task, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        if name in {"workspace", "web_fetch", "http"}:
+        if name in {"workspace", "web_fetch", "http", "repository"}:
             return await execute_tool(db, factory, agent, task, name, arguments)
         if name == "delegate_task":
             target = db.scalar(select(Agent).where(Agent.id == arguments.get("agent_id"), Agent.factory_id == factory.id, Agent.status != "hibernated"))
@@ -714,6 +917,265 @@ class Runtime:
             await self.reorganize(factory.id, str(arguments.get("action", "")), agent_id=arguments.get("agent_id") or (agent.id if agent else None), target_agent_id=arguments.get("target_agent_id"), space_id=arguments.get("space_id"))
             return {"action": arguments.get("action")}
         raise ValueError(f"unknown model action: {name}")
+
+    @staticmethod
+    def _cycle_tool_schema(write: bool) -> list[dict[str, Any]]:
+        operations = ["read", "search", "status", "diff"] + (["write"] if write else [])
+        return [{
+            "type": "function",
+            "function": {
+                "name": "repository",
+                "description": "Use only the isolated Factory Zero worktree. Read/search/status/diff are always available; write is available only during implementation.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "operation": {"type": "string", "enum": operations},
+                        "path": {"type": "string"},
+                        "query": {"type": "string"},
+                        "content": {"type": "string"},
+                    },
+                    "required": ["operation"],
+                },
+            },
+        }]
+
+    async def _cycle_model_call(
+        self,
+        db: Session,
+        factory: Factory,
+        cycle: ImprovementCycle,
+        agent: Agent,
+        instruction: str,
+        *,
+        write: bool = False,
+        json_mode: bool = False,
+    ) -> str:
+        provider = provider_for(db, factory.id)
+        messages: list[dict[str, Any]] = [
+            {
+                "role": "system",
+                "content": (
+                    f"You are {agent.name}, the Factory Zero {agent.role}. Work only on the configured AI Factory OS repository. "
+                    f"The isolated worktree is {cycle.worktree_path}. Repository id: {cycle.repository_id}. Cycle id: {cycle.id}. "
+                    "Never invent verification evidence. Keep changes small and explain the exact files and commands used."
+                ),
+            },
+            {"role": "user", "content": instruction},
+        ]
+        tools = self._cycle_tool_schema(write)
+        for _ in range(8):
+            try:
+                text = await provider.chat(messages, json_mode=json_mode and not tools, tools=tools or None)
+            except TypeError as exc:
+                if "tools" not in str(exc):
+                    raise
+                text = await provider.chat(messages, json_mode=json_mode)
+            response = provider.last_response
+            _record_usage(db, factory.id, response, agent_id=agent.id, model=provider.config.model, request_kind=f"factory_zero_{cycle.phase}")
+            if not response.tool_calls:
+                return text
+            messages.append({
+                "role": "assistant",
+                "content": response.content or None,
+                "tool_calls": [
+                    {"id": call.id, "type": "function", "function": {"name": call.name, "arguments": json.dumps(call.arguments)}}
+                    for call in response.tool_calls
+                ],
+            })
+            for call in response.tool_calls:
+                if call.name != "repository":
+                    raise ServiceError("Factory Zero model returned an unsupported tool")
+                arguments = {**call.arguments, "repository_id": cycle.repository_id, "worktree_path": cycle.worktree_path, "improvement_cycle_id": cycle.id}
+                if not write and arguments.get("operation") == "write":
+                    raise PermissionError("repository writes are only allowed during the implementation phase")
+                result = await execute_repository_tool(db, factory, agent, None, arguments)
+                messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)[:200_000]})
+        raise ServiceError("Factory Zero provider exceeded the tool-call turn limit")
+
+    @staticmethod
+    def _cycle_json(text: str, fallback_key: str = "summary") -> dict[str, Any]:
+        try:
+            return _json_payload(text)
+        except ProviderError:
+            return {fallback_key: text[:20_000]}
+
+    async def _process_improvement_cycle(self, db: Session, factory: Factory) -> bool:
+        current_time = now()
+        cycle = db.scalar(
+            select(ImprovementCycle).where(
+                ImprovementCycle.factory_id == factory.id,
+                ImprovementCycle.status == "queued",
+            ).order_by(ImprovementCycle.created_at).with_for_update(skip_locked=True)
+        )
+        if cycle is None:
+            cycle = db.scalar(
+                select(ImprovementCycle).where(
+                    ImprovementCycle.factory_id == factory.id,
+                    ImprovementCycle.status == "running",
+                    ImprovementCycle.lease_until < current_time,
+                ).order_by(ImprovementCycle.created_at).with_for_update(skip_locked=True)
+            )
+        if cycle is None:
+            return False
+        cycle.status = "running"
+        cycle.lease_until = current_time + timedelta(seconds=settings.task_lease_seconds)
+        cycle.started_at = cycle.started_at or current_time
+        record_event(db, factory.id, "improvement_cycle_started", {"cycle_id": cycle.id, "phase": cycle.phase})
+        db.commit()
+        try:
+            await self._advance_improvement_cycle(db, factory, cycle.id)
+        except Exception as exc:
+            db.rollback()
+            failed = db.get(ImprovementCycle, cycle.id)
+            if failed is not None:
+                failed.retry_count += 1
+                failed.error = str(exc)[:2_000]
+                failed.lease_until = None
+                if failed.retry_count <= 3:
+                    failed.status = "queued"
+                    record_event(db, factory.id, "improvement_cycle_retry", {"cycle_id": failed.id, "phase": failed.phase, "error": failed.error, "retry_count": failed.retry_count})
+                else:
+                    failed.status = "failed"
+                    record_event(db, factory.id, "improvement_cycle_failed", {"cycle_id": failed.id, "phase": failed.phase, "error": failed.error, "retry_count": failed.retry_count})
+                db.commit()
+        return True
+
+    async def _advance_improvement_cycle(self, db: Session, factory: Factory, cycle_id: str) -> None:
+        cycle = db.get(ImprovementCycle, cycle_id)
+        if cycle is None or cycle.status != "running":
+            return
+        repository = repository_for(db, factory.id, cycle.repository_id)
+        token = repository_token_for(db, factory.id, repository.id)
+        if cycle.phase == "discover":
+            if not cycle.worktree_path:
+                path, branch, base_sha = create_worktree(repository, cycle.id, token)
+                cycle.worktree_path = str(path)
+                cycle.branch_name = branch
+                cycle.base_sha = base_sha
+            author = db.get(Agent, cycle.author_agent_id)
+            if not author or author.factory_id != factory.id:
+                raise ServiceError("Factory Zero author agent is unavailable")
+            text = await self._cycle_model_call(
+                db,
+                factory,
+                cycle,
+                author,
+                "Return JSON with problem, rationale, files_to_inspect, and proposed_change. Inspect the repository first; do not edit files yet. Objective:\n" + cycle.objective,
+            )
+            cycle.proposal = self._cycle_json(text)
+            cycle.phase = "implement"
+            cycle.error = None
+            record_event(db, factory.id, "improvement_cycle_diagnosed", {"cycle_id": cycle.id, "branch": cycle.branch_name, "base_sha": cycle.base_sha})
+        elif cycle.phase == "implement":
+            author = db.get(Agent, cycle.author_agent_id)
+            if not author or author.factory_id != factory.id:
+                raise ServiceError("Factory Zero author agent is unavailable")
+            feedback = cycle.error or "none"
+            text = await self._cycle_model_call(
+                db,
+                factory,
+                cycle,
+                author,
+                "Implement the objective in the isolated worktree. Use repository write operations, inspect the diff, and return JSON with summary, files_changed, and commit_message. Do not commit or push yet.\nObjective:\n"
+                + cycle.objective + "\nPrior proposal:\n" + json.dumps(cycle.proposal, ensure_ascii=False)[:30_000] + "\nPrevious verification/review feedback:\n" + feedback,
+                write=True,
+            )
+            cycle.proposal = {**cycle.proposal, "implementation": self._cycle_json(text)}
+            cycle.phase = "verify"
+            cycle.error = None
+            record_event(db, factory.id, "improvement_cycle_implemented", {"cycle_id": cycle.id, "branch": cycle.branch_name})
+        elif cycle.phase == "verify":
+            test_result = run_configured_commands(repository, cycle.worktree_path or "", "test")
+            build_result = run_configured_commands(repository, cycle.worktree_path or "", "build")
+            lint_result = run_configured_commands(repository, cycle.worktree_path or "", "lint")
+            required = [test_result]
+            optional = [build_result, lint_result]
+            passed = bool(test_result.get("commands")) and all(bool(result.get("passed")) for result in required + [result for result in optional if result.get("commands")])
+            cycle.verification = {"passed": passed, "test": test_result, "build": build_result, "lint": lint_result, "head_sha": git_status(cycle.worktree_path or "").get("diff_stat", "")}
+            if passed:
+                cycle.phase = "review"
+                cycle.error = None
+                record_event(db, factory.id, "improvement_cycle_verified", {"cycle_id": cycle.id, "passed": True})
+            else:
+                cycle.phase = "implement"
+                cycle.error = "verification failed: " + json.dumps(cycle.verification, ensure_ascii=False)[:1_500]
+                record_event(db, factory.id, "improvement_cycle_verification_failed", {"cycle_id": cycle.id, "passed": False})
+        elif cycle.phase == "review":
+            reviewer = db.get(Agent, cycle.reviewer_agent_id)
+            author = db.get(Agent, cycle.author_agent_id)
+            if not reviewer or not author or reviewer.factory_id != factory.id or reviewer.id == author.id:
+                raise ServiceError("Factory Zero requires an independent reviewer")
+            diff = git_diff(cycle.worktree_path or "").get("diff", "")
+            text = await self._cycle_model_call(
+                db,
+                factory,
+                cycle,
+                reviewer,
+                "Review the exact uncommitted patch below. Return JSON with approved (boolean), summary, findings, and risks. Approve only when the objective is met and the verification evidence is credible.\nObjective:\n"
+                + cycle.objective + "\nVerification:\n" + json.dumps(cycle.verification, ensure_ascii=False)[:20_000] + "\nPatch:\n" + diff[:120_000],
+                json_mode=True,
+            )
+            review = self._cycle_json(text)
+            review["approved"] = bool(review.get("approved"))
+            review["reviewer_agent_id"] = reviewer.id
+            cycle.review = review
+            if review["approved"]:
+                cycle.phase = "merge"
+                cycle.error = None
+                record_event(db, factory.id, "improvement_cycle_reviewed", {"cycle_id": cycle.id, "approved": True, "reviewer_agent_id": reviewer.id})
+            else:
+                cycle.phase = "implement"
+                cycle.error = "independent review rejected: " + str(review.get("summary", "review did not approve"))[:1_500]
+                record_event(db, factory.id, "improvement_cycle_reviewed", {"cycle_id": cycle.id, "approved": False, "reviewer_agent_id": reviewer.id})
+        elif cycle.phase == "merge":
+            if not token:
+                raise RepositoryError("GitHub credential is required for autonomous merge")
+            if not bool(cycle.verification.get("passed")) or not bool(cycle.review.get("approved")):
+                raise PermissionError("merge requires verification and independent review")
+            cycle.head_sha = git_commit(
+                cycle.worktree_path or "",
+                str(cycle.proposal.get("implementation", {}).get("commit_message", "Factory Zero improvement")),
+            )
+            push_branch(cycle.worktree_path or "", cycle.branch_name or "", token)
+            pr = await create_pull_request(repository, token, cycle.branch_name or "", f"Factory Zero: {cycle.objective[:180]}", json.dumps({"objective": cycle.objective, "proposal": cycle.proposal, "verification": cycle.verification, "review": cycle.review}, ensure_ascii=False)[:20_000])
+            try:
+                cycle.pr_number = int(pr.get("number", 0) or 0)
+            except (TypeError, ValueError) as exc:
+                raise RepositoryError("GitHub returned an invalid pull request number") from exc
+            cycle.pr_url = str(pr.get("html_url", ""))
+            cycle.head_sha = str(pr.get("head", {}).get("sha", "") or "")
+            if not cycle.pr_number or not cycle.head_sha:
+                raise RepositoryError("GitHub did not return a pull request number and head SHA")
+            merge = await merge_pull_request(repository, token, cycle.pr_number, cycle.head_sha or "")
+            if not bool(merge.get("merged")):
+                raise RepositoryError(str(merge.get("message", "GitHub did not merge the pull request")))
+            cycle.phase = "observe"
+            cycle.error = None
+            record_event(db, factory.id, "improvement_cycle_merged", {"cycle_id": cycle.id, "pr_number": cycle.pr_number, "pr_url": cycle.pr_url, "head_sha": cycle.head_sha})
+        elif cycle.phase == "observe":
+            if not token or not cycle.pr_number:
+                raise RepositoryError("merged cycle is missing GitHub reconciliation data")
+            pr = await pull_request(repository, token, cycle.pr_number)
+            checks = await check_runs(repository, token, cycle.head_sha or str(pr.get("merge_commit_sha", "")))
+            cycle.observation = {
+                "merged": bool(pr.get("merged")),
+                "state": pr.get("state"),
+                "merge_commit_sha": pr.get("merge_commit_sha"),
+                "check_runs": {
+                    "total": checks.get("total_count", 0),
+                    "conclusion": [item.get("conclusion") for item in checks.get("check_runs", []) if isinstance(item, dict)],
+                },
+            }
+            cleanup_worktree(repository, cycle.worktree_path or "", cycle.branch_name, token)
+            cycle.status = "completed"
+            cycle.phase = "completed"
+            cycle.lease_until = None
+            cycle.completed_at = now()
+            cycle.error = None
+            record_event(db, factory.id, "improvement_cycle_completed", {"cycle_id": cycle.id, "pr_number": cycle.pr_number, "merge_commit_sha": cycle.observation.get("merge_commit_sha")})
+        cycle.updated_at = now()
+        cycle.lease_until = None if cycle.status != "running" else cycle.lease_until
+        db.commit()
 
     async def _process_task(self, db: Session, factory: Factory, task: Task) -> None:
         agent = db.scalar(select(Agent).where(Agent.id == task.assignee_id, Agent.factory_id == factory.id, Agent.status != "hibernated")) if task.assignee_id else db.scalar(select(Agent).where(Agent.factory_id == factory.id, Agent.status != "hibernated"))

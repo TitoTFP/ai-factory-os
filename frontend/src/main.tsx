@@ -846,6 +846,27 @@ function Floor({
 					detail={`${snapshot.usage.total_tokens} tokens / ${snapshot.usage.requests} requests`}
 				/>
 			</section>
+			{snapshot.improvement_cycles.length > 0 && (
+				<section className="panel cycle-panel">
+					<div className="panel-heading">
+						<div>
+							<span className="eyebrow">FACTORY ZERO / EVOLUTION</span>
+							<h3>Self-improvement cycles</h3>
+						</div>
+						<span className="view-all">{snapshot.repositories.length} repo{snapshot.repositories.length === 1 ? "" : "s"}</span>
+					</div>
+					{snapshot.improvement_cycles.slice(0, 3).map((cycle) => (
+						<div className="goal-row" key={cycle.id}>
+							<div className="goal-check">{cycle.status === "completed" ? "✓" : "↻"}</div>
+							<div className="goal-copy">
+								<strong>{cycle.phase.replaceAll("_", " ")}</strong>
+								<p>{cycle.objective}</p>
+							</div>
+							{cycle.pr_url ? <button type="button" className="status-text completed" onClick={() => window.open(cycle.pr_url ?? "", "_blank", "noopener,noreferrer")}>PR #{cycle.pr_number}</button> : <span className={`status-text ${cycle.status}`}>{cycle.status}</span>}
+						</div>
+					))}
+				</section>
+			)}
 			<div className="floor-grid">
 				<section className="panel floor-map">
 					<div className="panel-heading">

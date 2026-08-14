@@ -115,6 +115,8 @@ function snapshotFor(factory: Factory, run: Snapshot["run"] = null): Snapshot {
 			},
 		],
 		run,
+		repositories: [],
+		improvement_cycles: [],
 		usage: {
 			factory_id: factory.id,
 			provider: "openai-compatible",
@@ -162,7 +164,7 @@ class TestWebSocket {
 
 function resetApi() {
 	for (const mock of Object.values(apiMock)) mock.mockReset();
-	apiMock.eventsUrl.mockReturnValue("ws://factory.test/events");
+	apiMock.eventsUrl.mockReturnValue("wss://factory.test/events");
 	apiMock.factories.mockResolvedValue([]);
 	apiMock.snapshot.mockResolvedValue(snapshotA);
 	apiMock.createFactory.mockResolvedValue(factoryB);
@@ -447,7 +449,7 @@ describe("factory UI interactions", () => {
 		await screen.findByRole("heading", { name: "Factory Floor" });
 		apiMock.snapshot.mockImplementation(async () => current);
 		const socket = TestWebSocket.instances[0];
-		expect(socket.url).toBe("ws://factory.test/events");
+		expect(socket.url).toBe("wss://factory.test/events");
 
 		socket.open();
 		await waitFor(() =>

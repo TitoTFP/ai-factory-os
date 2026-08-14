@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
+
+from cryptography.fernet import Fernet
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 TEST_DB = Path(__file__).resolve().parents[1] / "test-suite.db"
@@ -9,8 +12,8 @@ if TEST_DATABASE_URL:
     os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 else:
     os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
-os.environ["SECRET_KEY"] = "test-secret-key"
-os.environ["MASTER_KEY"] = "X2FHjTTGfPR5ixOXRbs5Op0PTJQfokcKdMrWYEQMoK8="
+os.environ["SECRET_KEY"] = secrets.token_urlsafe(32)
+os.environ["MASTER_KEY"] = Fernet.generate_key().decode()
 os.environ["RUNTIME_POLL_SECONDS"] = "0.1"
 
 import pytest

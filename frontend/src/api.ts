@@ -109,6 +109,41 @@ export type Usage = {
 	cost_usd: number;
 	requests: number;
 };
+export type Repository = {
+	id: string;
+	factory_id: string;
+	provider: string;
+	owner: string;
+	name: string;
+	remote_url: string;
+	default_branch: string;
+	test_commands: string[][];
+	build_commands: string[][];
+	lint_commands: string[][];
+	status: string;
+};
+export type ImprovementCycle = {
+	id: string;
+	factory_id: string;
+	repository_id: string;
+	status: string;
+	phase: string;
+	objective: string;
+	branch_name: string | null;
+	worktree_path: string | null;
+	base_sha: string | null;
+	head_sha: string | null;
+	pr_number: number | null;
+	pr_url: string | null;
+	author_agent_id: string | null;
+	reviewer_agent_id: string | null;
+	proposal: Record<string, unknown>;
+	verification: Record<string, unknown>;
+	review: Record<string, unknown>;
+	observation: Record<string, unknown>;
+	error: string | null;
+	retry_count: number;
+};
 
 export type Snapshot = {
 	factory: Factory;
@@ -121,6 +156,8 @@ export type Snapshot = {
 	events: Event[];
 	run: Run | null;
 	usage: Usage;
+	repositories: Repository[];
+	improvement_cycles: ImprovementCycle[];
 };
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -163,6 +200,26 @@ export const api = {
 	snapshot: (token: string, id: string) =>
 		request<Snapshot>(`/api/factories/${id}`, {
 			headers: { Authorization: `Bearer ${token}` },
+		}),
+	repositories: (token: string, id: string) =>
+		request<Repository[]>(`/api/factories/${id}/repositories`, {
+			headers: { Authorization: `Bearer ${token}` },
+		}),
+	createRepository: (token: string, id: string, input: Record<string, unknown>) =>
+		request<Repository>(`/api/factories/${id}/repositories`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${token}` },
+			body: JSON.stringify(input),
+		}),
+	improvementCycles: (token: string, id: string) =>
+		request<ImprovementCycle[]>(`/api/factories/${id}/improvement-cycles`, {
+			headers: { Authorization: `Bearer ${token}` },
+		}),
+	createImprovementCycle: (token: string, id: string, input: Record<string, unknown>) =>
+		request<ImprovementCycle>(`/api/factories/${id}/improvement-cycles`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${token}` },
+			body: JSON.stringify(input),
 		}),
 	architect: (token: string, id: string) =>
 		request(`/api/factories/${id}/architect`, {
