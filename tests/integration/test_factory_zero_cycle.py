@@ -195,5 +195,6 @@ def test_cycle_lease_heartbeat_renews_owned_cycle(database, monkeypatch):
 
     asyncio.run(run_heartbeat())
     db.refresh(cycle)
-    assert before is not None and cycle.lease_until is not None and cycle.lease_until > before
+    assert before is not None and cycle.lease_until is not None
+    assert cycle.lease_until.timestamp() > before.timestamp()
     db.close()
