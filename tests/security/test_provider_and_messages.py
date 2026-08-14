@@ -22,6 +22,7 @@ def test_openai_compatible_adapter_parses_tool_calls_and_usage():
         async def handler(request: httpx.Request) -> httpx.Response:
             payload = json.loads(request.content)
             assert payload["tools"][0]["function"]["name"] == "workspace"
+            assert not payload["stream"]
             return httpx.Response(
                 200,
                 json={
@@ -112,9 +113,9 @@ def test_credential_permission_updates_sync_runtime_tools(client, auth, database
     db = SessionLocal()
     try:
         tools = {tool.name: tool for tool in db.scalars(select(Tool).where(Tool.factory_id == factory_id))}
-        assert tools["workspace"].enabled is False and tools["workspace"].permissions == []
-        assert tools["web_fetch"].enabled is True and tools["web_fetch"].permissions == ["GET"]
-        assert tools["http"].enabled is False and tools["http"].permissions == []
+        assert not tools["workspace"].enabled and tools["workspace"].permissions == []
+        assert tools["web_fetch"].enabled and tools["web_fetch"].permissions == ["GET"]
+        assert not tools["http"].enabled and tools["http"].permissions == []
     finally:
         db.close()
 

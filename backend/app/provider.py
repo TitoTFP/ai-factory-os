@@ -56,6 +56,7 @@ class OpenAICompatibleProvider:
             "model": self.config.model,
             "messages": messages,
             "temperature": 0.2,
+            "stream": False,
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}

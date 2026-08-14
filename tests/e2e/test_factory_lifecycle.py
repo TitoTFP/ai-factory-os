@@ -76,6 +76,8 @@ def test_workspace_boundary_and_tool_audit(database):
             assert False, "path traversal should fail"
         except ValueError:
             pass
+        directory = asyncio.run(execute_tool(db, factory, agent, None, "workspace", {"operation": "read", "path": "."}))
+        assert directory["entries"] == []
         asyncio.run(execute_tool(db, factory, agent, None, "workspace", {"operation": "write", "path": "notes.md", "content": "hello"}))
         assert db.scalar(select(Event).where(Event.factory_id == factory.id, Event.event_type == "tool_called")) is not None
     finally:

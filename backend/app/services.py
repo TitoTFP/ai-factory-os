@@ -346,14 +346,20 @@ async def execute_tool(
         if operation not in tool.permissions:
             raise PermissionError(f"workspace operation is not allowed: {operation}")
         name = str(arguments.get("path", "artifact.txt"))
+        root = safe_workspace_path(factory.id, ".")
+        root.mkdir(parents=True, exist_ok=True)
         path = safe_workspace_path(factory.id, name)
         if operation == "write":
             content = str(arguments.get("content", ""))
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
             result = {"path": name, "bytes": len(content.encode())}
-        else:
+        elif path.is_dir():
+            result = {"path": name, "entries": sorted(str(item.relative_to(root)) for item in path.rglob("*"))}
+        elif path.is_file():
             result = {"path": name, "content": path.read_text(encoding="utf-8")}
+        else:
+            result = {"path": name, "content": "", "exists": False}
     elif tool_name in {"web_fetch", "http"}:
         method = "GET" if tool_name == "web_fetch" else str(arguments.get("method", "GET")).upper()
         if method not in tool.permissions:
