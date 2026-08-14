@@ -67,7 +67,8 @@ class OpenAICompatibleProvider:
         owns_client = self.client is None
         client = self.client or httpx.AsyncClient(timeout=90)
         try:
-            for attempt in range(3):
+            max_attempts = 5
+            for attempt in range(max_attempts):
                 try:
                     response = await client.post(
                         self.config.base_url.rstrip("/") + "/chat/completions",
@@ -75,16 +76,21 @@ class OpenAICompatibleProvider:
                         json=payload,
                     )
                     if response.status_code in {408, 429} or response.status_code >= 500:
-                        if attempt == 2:
+                        if attempt == max_attempts - 1:
                             response.raise_for_status()
-                        await asyncio.sleep(2**attempt)
+                        retry_after = response.headers.get("retry-after")
+                        try:
+                            delay = min(max(float(retry_after or 2**attempt), 1.0), 30.0)
+                        except ValueError:
+                            delay = min(2**attempt, 30)
+                        await asyncio.sleep(delay)
                         continue
                     response.raise_for_status()
                     break
                 except httpx.RequestError as exc:
-                    if attempt == 2:
+                    if attempt == max_attempts - 1:
                         raise exc
-                    await asyncio.sleep(2**attempt)
+                    await asyncio.sleep(min(2**attempt, 30))
             try:
                 data = response.json()
                 usage = data.get("usage") or {}
