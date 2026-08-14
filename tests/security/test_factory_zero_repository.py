@@ -51,9 +51,9 @@ def test_checkout_symlink_is_rejected_before_git_runs(tmp_path, monkeypatch):
     repository = Repository(
         id="repo",
         factory_id="factory",
-        owner="owner",
-        name="repo",
-        remote_url="https://github.com/owner/repo.git",
+        owner="TitoTFP",
+        name="ai-factory-os",
+        remote_url="https://github.com/TitoTFP/ai-factory-os.git",
     )
     with pytest.raises(RepositoryError, match="cannot be a symlink"):
         ensure_checkout(repository)
@@ -74,6 +74,14 @@ def test_repository_token_is_encrypted_and_never_returned(client, auth):
     )
     assert factory_response.status_code == 201
     factory_id = factory_response.json()["id"]
+
+    rejected = client.post(
+        f"/api/factories/{factory_id}/repositories",
+        headers=auth,
+        json={"owner": "other", "name": "repo"},
+    )
+    assert rejected.status_code == 422
+    assert "TitoTFP/ai-factory-os" in rejected.text
 
     response = client.post(
         f"/api/factories/{factory_id}/repositories",

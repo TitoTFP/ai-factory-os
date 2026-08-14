@@ -51,7 +51,7 @@ from .schemas import (
 from .oauth import OAuthError, verify_oauth_code
 from .security import create_token, decode_token, encrypt_secret, hash_password, new_oauth_state, utc_now, verify_password
 from .network import validate_external_url
-from .repository import RepositoryError, validate_github_url
+from .repository import RepositoryError, validate_factory_zero_repository, validate_github_url
 from .services import architect_factory, credential_for, record_event, repository_for, runtime
 
 
@@ -361,6 +361,7 @@ def create_repository(factory_id: str, payload: RepositoryCreate, db: Session = 
     name = payload.name.strip()
     remote_url = payload.remote_url or f"https://github.com/{owner}/{name}.git"
     try:
+        validate_factory_zero_repository(owner, name)
         validate_github_url(remote_url, owner, name)
     except RepositoryError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

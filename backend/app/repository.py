@@ -23,6 +23,8 @@ _COMPONENT = re.compile(r"[A-Za-z0-9_-]+$")
 _MAX_OUTPUT = 200_000
 _MAX_COMMAND_SECONDS = 600
 _GITHUB_API = "https://api.github.com"
+_FACTORY_ZERO_OWNER = "TitoTFP"
+_FACTORY_ZERO_NAME = "ai-factory-os"
 
 
 def _component(value: str, label: str) -> str:
@@ -30,6 +32,11 @@ def _component(value: str, label: str) -> str:
     if not _COMPONENT.fullmatch(value):
         raise RepositoryError(f"invalid {label}")
     return value
+
+
+def validate_factory_zero_repository(owner: str, name: str) -> None:
+    if owner.casefold() != _FACTORY_ZERO_OWNER.casefold() or name.casefold() != _FACTORY_ZERO_NAME.casefold():
+        raise RepositoryError("Factory Zero is restricted to TitoTFP/ai-factory-os")
 
 
 def validate_github_url(url: str, owner: str, name: str) -> str:
@@ -102,6 +109,7 @@ def _run_git(args: list[str], *, cwd: Path | None = None, token: str | None = No
 
 
 def _repo_base(repository: Repository) -> Path:
+    validate_factory_zero_repository(repository.owner, repository.name)
     validate_github_url(repository.remote_url, repository.owner, repository.name)
     return repository_root(repository.factory_id, repository.id)
 

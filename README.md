@@ -18,6 +18,13 @@ AI Factory OS is a durable, multi-tenant application for running autonomous agen
 - **Permission-derived tools** — workspace files, web fetch, scoped generic HTTP, delegation, review, and reorganization.
 - **Factory Floor UI** — onboarding, factory switching, detail drawers, lifecycle controls, live WebSocket activity, and estimated token/cost telemetry.
 - **Operational durability** — Alembic migrations, PostgreSQL deployment, SQLite test fallback, named workspace volume, cursor-based events, and idempotent message creation.
+- **Factory Zero** — a repository-first discover → diagnose → implement → verify → independent-review → PR → merge → observe loop for `TitoTFP/ai-factory-os`.
+
+### Factory Zero safety model
+
+Factory Zero stores a first-class repository configuration and an encrypted GitHub token protected by `MASTER_KEY`. Each improvement cycle gets a durable, per-cycle Git worktree under `/app/data`; repository paths reject traversal and symlinks, and configured test/build/lint commands run as bounded argv-only subprocesses. Every repository, command, provider, review, PR, merge, and lifecycle transition is audited.
+
+Cycle leases use ownership tokens and heartbeats so long provider calls and verification commands cannot be stolen by another worker. Restart recovery requeues stale cycles. Push/PR/merge steps reconcile existing commits and pull requests before retrying, and successful GitHub checks (when configured) are required before merge. The live acceptance test is intentionally one-shot: once its marker is merged, reruns skip rather than create duplicate documentation commits.
 
 This release intentionally excludes distributed workers/Kubernetes, billing, browser automation, named third-party integrations, a plugin marketplace, and native provider SDKs. The provider boundary is OpenAI-compatible HTTP.
 
