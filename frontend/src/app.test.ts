@@ -320,6 +320,37 @@ describe("factory UI interactions", () => {
 		expect(await screen.findByText(factoryB.mission)).not.toBeNull();
 	});
 
+	it("does not let a slow created snapshot overwrite a later factory selection", async () => {
+		localStorage.setItem("factory_token", "token-1");
+		apiMock.factories.mockResolvedValue([factoryA, factoryB]);
+		let releaseCreatedSnapshot!: (value: Snapshot) => void;
+		const slowCreatedSnapshot = new Promise<Snapshot>((resolve) => {
+			releaseCreatedSnapshot = resolve;
+		});
+		apiMock.snapshot.mockImplementation(async (_token: string, id: string) =>
+			id === factoryB.id ? slowCreatedSnapshot : snapshotA,
+		);
+		render(React.createElement(App));
+		await screen.findByRole("heading", { name: "Factory Floor" });
+		fireEvent.click(screen.getByRole("button", { name: /Switch factory/ }));
+		fireEvent.click(screen.getByRole("button", { name: /Create factory/ }));
+		fillOnboardingForm();
+		fireEvent.click(
+			screen.getByRole("button", { name: /Create another factory/ }),
+		);
+		await waitFor(() =>
+			expect(apiMock.architect).toHaveBeenCalledWith("token-1", factoryB.id),
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /Switch factory/ }));
+		fireEvent.click(screen.getByRole("menuitem", { name: "Alpha" }));
+		await screen.findByText(factoryA.mission);
+		releaseCreatedSnapshot(snapshotB);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(screen.getByText(factoryA.mission)).not.toBeNull();
+		expect(screen.queryByText(factoryB.mission)).toBeNull();
+	});
+
 	it("retries architecture without creating a duplicate factory", async () => {
 		localStorage.setItem("factory_token", "token-1");
 		apiMock.factories.mockResolvedValue([factoryA]);
@@ -330,7 +361,9 @@ describe("factory UI interactions", () => {
 		fireEvent.click(screen.getByRole("button", { name: /Switch factory/ }));
 		fireEvent.click(screen.getByRole("button", { name: /Create factory/ }));
 		fillOnboardingForm();
-		fireEvent.click(screen.getByRole("button", { name: /Create another factory/ }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /Create another factory/ }),
+		);
 		await screen.findByRole("alert");
 		expect(apiMock.createFactory).toHaveBeenCalledTimes(1);
 		fireEvent.click(screen.getByRole("button", { name: /Retry architecture/ }));

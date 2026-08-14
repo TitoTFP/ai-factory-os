@@ -95,7 +95,7 @@ export function App() {
 			setFactory(nextFactory);
 			setSnapshot(nextSnapshot);
 		} finally {
-			setLoading(false);
+			if (generation === loadGeneration.current) setLoading(false);
 		}
 	};
 
@@ -114,12 +114,12 @@ export function App() {
 			setFactory(nextFactory);
 			setSnapshot(nextSnapshot);
 		} catch (e) {
-			setError((e as Error).message);
+			if (generation === loadGeneration.current) setError((e as Error).message);
 		}
 	};
 
 	const handleCreated = async (created: Factory) => {
-		++loadGeneration.current;
+		const generation = ++loadGeneration.current;
 		setFactoryMenuOpen(false);
 		setCreatingFactory(false);
 		setDraftFactory(null);
@@ -130,9 +130,11 @@ export function App() {
 		setFactory(created);
 		setSnapshot(null);
 		try {
-			setSnapshot(await api.snapshot(token, created.id));
+			const nextSnapshot = await api.snapshot(token, created.id);
+			if (generation !== loadGeneration.current) return;
+			setSnapshot(nextSnapshot);
 		} catch (e) {
-			setError((e as Error).message);
+			if (generation === loadGeneration.current) setError((e as Error).message);
 		}
 	};
 
@@ -203,9 +205,9 @@ export function App() {
 				onCancel={
 					factory
 						? () => {
-							setCreatingFactory(false);
-							setDraftFactory(null);
-						}
+								setCreatingFactory(false);
+								setDraftFactory(null);
+							}
 						: undefined
 				}
 				error={error}
@@ -306,9 +308,15 @@ export function App() {
 						>
 							<span className="nav-icon">{item.icon}</span>
 							{item.label}
-							{item.id === "messages" && snapshot?.messages.filter((message) => message.status !== "read").length ? (
+							{item.id === "messages" &&
+							snapshot?.messages.filter((message) => message.status !== "read")
+								.length ? (
 								<span className="nav-count" aria-label="Unread messages">
-									{snapshot.messages.filter((message) => message.status !== "read").length}
+									{
+										snapshot.messages.filter(
+											(message) => message.status !== "read",
+										).length
+									}
 								</span>
 							) : null}
 						</button>
@@ -725,7 +733,7 @@ function Onboarding({
 }
 
 function Floor({
-		snapshot,
+	snapshot,
 	onAction,
 	onSelect,
 	busy,
@@ -803,7 +811,9 @@ function Floor({
 					<button
 						type="button"
 						disabled={busy}
-						onClick={() => onAction(() => api.run(token, snapshot.factory.id, "resume"))}
+						onClick={() =>
+							onAction(() => api.run(token, snapshot.factory.id, "resume"))
+						}
 					>
 						Retry
 					</button>
@@ -1057,7 +1067,12 @@ function DetailPanel({
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}, [onClose]);
 	return (
-		<div className="detail-panel" role="dialog" aria-modal="true" aria-label="Record details">
+		<div
+			className="detail-panel"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Record details"
+		>
 			<div className="panel-heading">
 				<h3>Details</h3>
 				<button ref={closeButton} className="secondary" onClick={onClose}>
