@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
 from datetime import timedelta
 
 import pytest
 from sqlalchemy import select
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import Agent, Event, Factory, ImprovementCycle, Repository, Space, now
 from app.provider import ProviderResponse, ToolCall
@@ -160,3 +162,38 @@ def test_runtime_requeues_stale_improvement_cycle(database):
         assert recovered.error == "requeued after worker restart or lease expiry"
     finally:
         db.close()
+
+
+@pytest.mark.factory_zero
+def test_cycle_lease_heartbeat_renews_owned_cycle(database, monkeypatch):
+    db = SessionLocal()
+    factory = Factory(owner_id="u", name="Lease Factory", mission="m", primary_objective="o", constraints=[])
+    db.add(factory)
+    db.flush()
+    repository = Repository(factory_id=factory.id, owner="TitoTFP", name="ai-factory-os", remote_url="https://github.com/TitoTFP/ai-factory-os.git")
+    db.add(repository)
+    db.flush()
+    cycle = ImprovementCycle(
+        factory_id=factory.id,
+        repository_id=repository.id,
+        objective="renew",
+        status="running",
+        lease_token="lease-token",
+        lease_until=now(),
+    )
+    db.add(cycle)
+    db.commit()
+    before = cycle.lease_until
+    monkeypatch.setattr("app.services.settings", replace(settings, task_lease_seconds=3.0))
+
+    async def run_heartbeat() -> None:
+        lost = asyncio.Event()
+        heartbeat = asyncio.create_task(Runtime()._cycle_lease_heartbeat(db, cycle.id, "lease-token", lost))
+        await asyncio.sleep(1.1)
+        lost.set()
+        await asyncio.gather(heartbeat, return_exceptions=True)
+
+    asyncio.run(run_heartbeat())
+    db.refresh(cycle)
+    assert before is not None and cycle.lease_until is not None and cycle.lease_until > before
+    db.close()

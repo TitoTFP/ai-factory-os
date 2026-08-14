@@ -5,7 +5,7 @@ import sys
 import pytest
 from sqlalchemy import select
 
-from app.repository import RepositoryError, read_file, run_configured_commands, safe_repository_path, write_file
+from app.repository import RepositoryError, ensure_checkout, read_file, run_configured_commands, safe_repository_path, write_file
 from app.security import decrypt_secret
 from app.db import SessionLocal
 from app.models import Repository, RepositoryCredential
@@ -37,6 +37,26 @@ def test_repository_workspace_rejects_escape_and_runs_only_argv_commands(tmp_pat
     result = run_configured_commands(repository, worktree, "test")
     assert result["passed"]
     assert result["commands"][0]["returncode"] == 0
+
+
+@pytest.mark.factory_zero
+def test_checkout_symlink_is_rejected_before_git_runs(tmp_path, monkeypatch):
+    repository_root = tmp_path / "factories"
+    monkeypatch.setattr("app.repository.REPOSITORY_ROOT", repository_root)
+    checkout_parent = repository_root / "factory" / "repositories" / "repo"
+    checkout_parent.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (checkout_parent / "checkout").symlink_to(outside, target_is_directory=True)
+    repository = Repository(
+        id="repo",
+        factory_id="factory",
+        owner="owner",
+        name="repo",
+        remote_url="https://github.com/owner/repo.git",
+    )
+    with pytest.raises(RepositoryError, match="cannot be a symlink"):
+        ensure_checkout(repository)
 
 
 @pytest.mark.factory_zero

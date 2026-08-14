@@ -43,8 +43,10 @@ from .repository import (
     create_pull_request,
     create_worktree,
     ensure_checkout,
+    find_pull_request,
     git_commit,
     git_diff,
+    git_head,
     git_status,
     merge_pull_request,
     pull_request,
@@ -61,6 +63,11 @@ from .security import decrypt_secret
 
 class ServiceError(RuntimeError):
     """A runtime service operation failed with a user-safe message."""
+
+
+class LeaseLost(ServiceError):
+    """The worker no longer owns the durable improvement-cycle lease."""
+
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[2] / "data" / "factories"
 
@@ -608,6 +615,7 @@ class Runtime:
             for cycle in stale_cycles:
                 cycle.status = "queued"
                 cycle.lease_until = None
+                cycle.lease_token = None
                 cycle.error = "requeued after worker restart or lease expiry"
                 record_event(db, cycle.factory_id, "improvement_cycle_recovered", {"cycle_id": cycle.id, "phase": cycle.phase})
             if stale_cycles:
@@ -651,6 +659,57 @@ class Runtime:
                 db.commit()
         finally:
             db.close()
+
+    @staticmethod
+    def _cycle_lease_owned(db: Session, cycle_id: str, lease_token: str) -> bool:
+        return db.scalar(select(ImprovementCycle.id).where(
+            ImprovementCycle.id == cycle_id,
+            ImprovementCycle.status == "running",
+            ImprovementCycle.lease_token == lease_token,
+        )) is not None
+
+    def _assert_cycle_lease(
+        self,
+        db: Session,
+        cycle_id: str,
+        lease_token: str | None,
+        lease_lost: asyncio.Event | None,
+    ) -> None:
+        if lease_token is None:
+            return
+        if lease_lost is not None and lease_lost.is_set():
+            raise LeaseLost("improvement-cycle lease is no longer owned")
+        if not self._cycle_lease_owned(db, cycle_id, lease_token):
+            raise LeaseLost("improvement-cycle lease is no longer owned")
+
+    async def _cycle_lease_heartbeat(
+        self,
+        db: Session,
+        cycle_id: str,
+        lease_token: str,
+        lost: asyncio.Event,
+    ) -> None:
+        interval = max(1.0, settings.task_lease_seconds / 3.0)
+        while not lost.is_set():
+            try:
+                await asyncio.wait_for(lost.wait(), timeout=interval)
+                return
+            except TimeoutError:
+                try:
+                    cycle = db.scalar(select(ImprovementCycle).where(
+                        ImprovementCycle.id == cycle_id,
+                        ImprovementCycle.status == "running",
+                        ImprovementCycle.lease_token == lease_token,
+                    ))
+                    if cycle is None:
+                        lost.set()
+                        return
+                    cycle.lease_until = now() + timedelta(seconds=settings.task_lease_seconds)
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    lost.set()
+                    return
 
     async def _run(self) -> None:
         while not self._stop.is_set():
@@ -949,7 +1008,10 @@ class Runtime:
         *,
         write: bool = False,
         json_mode: bool = False,
+        lease_token: str | None = None,
+        lease_lost: asyncio.Event | None = None,
     ) -> str:
+        self._assert_cycle_lease(db, cycle.id, lease_token, lease_lost)
         provider = provider_for(db, factory.id)
         messages: list[dict[str, Any]] = [
             {
@@ -973,6 +1035,7 @@ class Runtime:
                 text = await provider.chat(messages, json_mode=json_mode)
             response = provider.last_response
             _record_usage(db, factory.id, response, agent_id=agent.id, model=provider.config.model, request_kind=f"factory_zero_{cycle.phase}")
+            self._assert_cycle_lease(db, cycle.id, lease_token, lease_lost)
             if not response.tool_calls:
                 return text
             messages.append({
@@ -989,6 +1052,7 @@ class Runtime:
                 arguments = {**call.arguments, "repository_id": cycle.repository_id, "worktree_path": cycle.worktree_path, "improvement_cycle_id": cycle.id}
                 if not write and arguments.get("operation") == "write":
                     raise PermissionError("repository writes are only allowed during the implementation phase")
+                self._assert_cycle_lease(db, cycle.id, lease_token, lease_lost)
                 result = await execute_repository_tool(db, factory, agent, None, arguments)
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)[:200_000]})
         raise ServiceError("Factory Zero provider exceeded the tool-call turn limit")
@@ -1018,38 +1082,59 @@ class Runtime:
             )
         if cycle is None:
             return False
+        lease_token = new_id()
         cycle.status = "running"
         cycle.lease_until = current_time + timedelta(seconds=settings.task_lease_seconds)
+        cycle.lease_token = lease_token
         cycle.started_at = cycle.started_at or current_time
         record_event(db, factory.id, "improvement_cycle_started", {"cycle_id": cycle.id, "phase": cycle.phase})
         db.commit()
+        lease_lost = asyncio.Event()
+        heartbeat = asyncio.create_task(self._cycle_lease_heartbeat(db, cycle.id, lease_token, lease_lost))
         try:
-            await self._advance_improvement_cycle(db, factory, cycle.id)
+            await self._advance_improvement_cycle(db, factory, cycle.id, lease_token, lease_lost)
+        except LeaseLost:
+            db.rollback()
         except Exception as exc:
             db.rollback()
             failed = db.get(ImprovementCycle, cycle.id)
-            if failed is not None:
-                failed.retry_count += 1
-                failed.error = str(exc)[:2_000]
-                failed.lease_until = None
-                if failed.retry_count <= 3:
-                    failed.status = "queued"
-                    record_event(db, factory.id, "improvement_cycle_retry", {"cycle_id": failed.id, "phase": failed.phase, "error": failed.error, "retry_count": failed.retry_count})
-                else:
-                    failed.status = "failed"
-                    record_event(db, factory.id, "improvement_cycle_failed", {"cycle_id": failed.id, "phase": failed.phase, "error": failed.error, "retry_count": failed.retry_count})
-                db.commit()
+            if failed is None:
+                return True
+            if failed.lease_token != lease_token:
+                return True
+            failed.retry_count += 1
+            failed.error = str(exc)[:2_000]
+            failed.lease_until = None
+            failed.lease_token = None
+            if failed.retry_count <= 3:
+                failed.status = "queued"
+                record_event(db, factory.id, "improvement_cycle_retry", {"cycle_id": failed.id, "phase": failed.phase, "error": failed.error, "retry_count": failed.retry_count})
+            else:
+                failed.status = "failed"
+                record_event(db, factory.id, "improvement_cycle_failed", {"cycle_id": failed.id, "phase": failed.phase, "error": failed.error, "retry_count": failed.retry_count})
+            db.commit()
+        finally:
+            heartbeat.cancel()
+            await asyncio.gather(heartbeat, return_exceptions=True)
         return True
 
-    async def _advance_improvement_cycle(self, db: Session, factory: Factory, cycle_id: str) -> None:
+    async def _advance_improvement_cycle(
+        self,
+        db: Session,
+        factory: Factory,
+        cycle_id: str,
+        lease_token: str | None = None,
+        lease_lost: asyncio.Event | None = None,
+    ) -> None:
         cycle = db.get(ImprovementCycle, cycle_id)
         if cycle is None or cycle.status != "running":
             return
+        self._assert_cycle_lease(db, cycle_id, lease_token, lease_lost)
         repository = repository_for(db, factory.id, cycle.repository_id)
         token = repository_token_for(db, factory.id, repository.id)
         if cycle.phase == "discover":
             if not cycle.worktree_path:
-                path, branch, base_sha = create_worktree(repository, cycle.id, token)
+                path, branch, base_sha = await asyncio.to_thread(create_worktree, repository, cycle.id, token)
                 cycle.worktree_path = str(path)
                 cycle.branch_name = branch
                 cycle.base_sha = base_sha
@@ -1062,6 +1147,8 @@ class Runtime:
                 cycle,
                 author,
                 "Return JSON with problem, rationale, files_to_inspect, and proposed_change. Inspect the repository first; do not edit files yet. Objective:\n" + cycle.objective,
+                lease_token=lease_token,
+                lease_lost=lease_lost,
             )
             cycle.proposal = self._cycle_json(text)
             cycle.phase = "implement"
@@ -1080,19 +1167,24 @@ class Runtime:
                 "Implement the objective in the isolated worktree. Use repository write operations, inspect the diff, and return JSON with summary, files_changed, and commit_message. Do not commit or push yet.\nObjective:\n"
                 + cycle.objective + "\nPrior proposal:\n" + json.dumps(cycle.proposal, ensure_ascii=False)[:30_000] + "\nPrevious verification/review feedback:\n" + feedback,
                 write=True,
+                lease_token=lease_token,
+                lease_lost=lease_lost,
             )
             cycle.proposal = {**cycle.proposal, "implementation": self._cycle_json(text)}
             cycle.phase = "verify"
             cycle.error = None
             record_event(db, factory.id, "improvement_cycle_implemented", {"cycle_id": cycle.id, "branch": cycle.branch_name})
         elif cycle.phase == "verify":
-            test_result = run_configured_commands(repository, cycle.worktree_path or "", "test")
-            build_result = run_configured_commands(repository, cycle.worktree_path or "", "build")
-            lint_result = run_configured_commands(repository, cycle.worktree_path or "", "lint")
+            test_result = await asyncio.to_thread(run_configured_commands, repository, cycle.worktree_path or "", "test")
+            build_result = await asyncio.to_thread(run_configured_commands, repository, cycle.worktree_path or "", "build")
+            lint_result = await asyncio.to_thread(run_configured_commands, repository, cycle.worktree_path or "", "lint")
             required = [test_result]
             optional = [build_result, lint_result]
             passed = bool(test_result.get("commands")) and all(bool(result.get("passed")) for result in required + [result for result in optional if result.get("commands")])
-            cycle.verification = {"passed": passed, "test": test_result, "build": build_result, "lint": lint_result, "head_sha": git_status(cycle.worktree_path or "").get("diff_stat", "")}
+            status_result = await asyncio.to_thread(git_status, cycle.worktree_path or "")
+            changed = bool(status_result.get("status") or status_result.get("diff_stat"))
+            passed = passed and changed
+            cycle.verification = {"passed": passed, "test": test_result, "build": build_result, "lint": lint_result, "head_sha": status_result.get("diff_stat", ""), "changed": changed}
             if passed:
                 cycle.phase = "review"
                 cycle.error = None
@@ -1115,6 +1207,8 @@ class Runtime:
                 "Review the exact uncommitted patch below. Return JSON with approved (boolean), summary, findings, and risks. Approve only when the objective is met and the verification evidence is credible.\nObjective:\n"
                 + cycle.objective + "\nVerification:\n" + json.dumps(cycle.verification, ensure_ascii=False)[:20_000] + "\nPatch:\n" + diff[:120_000],
                 json_mode=True,
+                lease_token=lease_token,
+                lease_lost=lease_lost,
             )
             review = self._cycle_json(text)
             review["approved"] = bool(review.get("approved"))
@@ -1133,32 +1227,71 @@ class Runtime:
                 raise RepositoryError("GitHub credential is required for autonomous merge")
             if not bool(cycle.verification.get("passed")) or not bool(cycle.review.get("approved")):
                 raise PermissionError("merge requires verification and independent review")
-            cycle.head_sha = git_commit(
-                cycle.worktree_path or "",
-                str(cycle.proposal.get("implementation", {}).get("commit_message", "Factory Zero improvement")),
-            )
-            push_branch(cycle.worktree_path or "", cycle.branch_name or "", token)
-            pr = await create_pull_request(repository, token, cycle.branch_name or "", f"Factory Zero: {cycle.objective[:180]}", json.dumps({"objective": cycle.objective, "proposal": cycle.proposal, "verification": cycle.verification, "review": cycle.review}, ensure_ascii=False)[:20_000])
+            worktree = cycle.worktree_path or ""
+            commit_message = str(cycle.proposal.get("implementation", {}).get("commit_message", "Factory Zero improvement"))
+            if lease_token is None:
+                cycle.head_sha = git_commit(worktree, commit_message)
+            else:
+                status_result = await asyncio.to_thread(git_status, worktree)
+                current_head = await asyncio.to_thread(git_head, worktree)
+                changed = bool(status_result.get("status") or status_result.get("diff_stat"))
+                if current_head == cycle.base_sha:
+                    if not changed:
+                        raise RepositoryError("worktree has no changes to commit")
+                    cycle.head_sha = await asyncio.to_thread(git_commit, worktree, commit_message)
+                else:
+                    cycle.head_sha = current_head
+            await asyncio.to_thread(push_branch, worktree, cycle.branch_name or "", token)
+            pr: dict[str, Any] | None = None
+            if lease_token is not None:
+                if cycle.pr_number:
+                    pr = await pull_request(repository, token, cycle.pr_number)
+                else:
+                    pr = await find_pull_request(repository, token, cycle.branch_name or "")
+            if pr is not None and lease_token is not None and not cycle.pr_number:
+                try:
+                    existing_number = int(pr.get("number", 0) or 0)
+                except (TypeError, ValueError) as exc:
+                    raise RepositoryError("GitHub returned an invalid pull request number") from exc
+                if existing_number:
+                    pr = await pull_request(repository, token, existing_number)
+            if pr is None:
+                pr = await create_pull_request(repository, token, cycle.branch_name or "", f"Factory Zero: {cycle.objective[:180]}", json.dumps({"objective": cycle.objective, "proposal": cycle.proposal, "verification": cycle.verification, "review": cycle.review}, ensure_ascii=False)[:20_000])
             try:
                 cycle.pr_number = int(pr.get("number", 0) or 0)
             except (TypeError, ValueError) as exc:
                 raise RepositoryError("GitHub returned an invalid pull request number") from exc
             cycle.pr_url = str(pr.get("html_url", ""))
-            cycle.head_sha = str(pr.get("head", {}).get("sha", "") or "")
+            cycle.head_sha = str(pr.get("head", {}).get("sha", "") or cycle.head_sha or "")
             if not cycle.pr_number or not cycle.head_sha:
                 raise RepositoryError("GitHub did not return a pull request number and head SHA")
-            merge = await merge_pull_request(repository, token, cycle.pr_number, cycle.head_sha or "")
+            head_sha = str(cycle.head_sha)
+            try:
+                pull_number = int(cycle.pr_number)
+            except (TypeError, ValueError) as exc:
+                raise RepositoryError("GitHub returned an invalid pull request number") from exc
+            if lease_token is not None:
+                checks = await check_runs(repository, token, head_sha)
+                cycle.observation = {**cycle.observation, "pre_merge_checks": checks}
+                runs = [item for item in checks.get("check_runs", []) if isinstance(item, dict)]
+                if runs and any(item.get("status") != "completed" or item.get("conclusion") != "success" for item in runs):
+                    cycle.observation = {**cycle.observation, "pre_merge_checks": checks}
+                    raise RepositoryError("GitHub checks have not all passed")
+            merge = {"merged": bool(pr.get("merged"))}
+            if not merge["merged"]:
+                merge = await merge_pull_request(repository, token, pull_number, head_sha)
             if not bool(merge.get("merged")):
                 raise RepositoryError(str(merge.get("message", "GitHub did not merge the pull request")))
             cycle.phase = "observe"
             cycle.error = None
-            record_event(db, factory.id, "improvement_cycle_merged", {"cycle_id": cycle.id, "pr_number": cycle.pr_number, "pr_url": cycle.pr_url, "head_sha": cycle.head_sha})
+            record_event(db, factory.id, "improvement_cycle_merged", {"cycle_id": cycle.id, "pr_number": cycle.pr_number, "pr_url": cycle.pr_url, "head_sha": cycle.head_sha, "reconciled": bool(pr.get("merged"))})
         elif cycle.phase == "observe":
             if not token or not cycle.pr_number:
                 raise RepositoryError("merged cycle is missing GitHub reconciliation data")
             pr = await pull_request(repository, token, cycle.pr_number)
             checks = await check_runs(repository, token, cycle.head_sha or str(pr.get("merge_commit_sha", "")))
             cycle.observation = {
+                **cycle.observation,
                 "merged": bool(pr.get("merged")),
                 "state": pr.get("state"),
                 "merge_commit_sha": pr.get("merge_commit_sha"),
@@ -1167,15 +1300,19 @@ class Runtime:
                     "conclusion": [item.get("conclusion") for item in checks.get("check_runs", []) if isinstance(item, dict)],
                 },
             }
-            cleanup_worktree(repository, cycle.worktree_path or "", cycle.branch_name, token)
+            await asyncio.to_thread(cleanup_worktree, repository, cycle.worktree_path or "", cycle.branch_name, token)
+            self._assert_cycle_lease(db, cycle_id, lease_token, lease_lost)
             cycle.status = "completed"
             cycle.phase = "completed"
             cycle.lease_until = None
+            cycle.lease_token = None
             cycle.completed_at = now()
             cycle.error = None
             record_event(db, factory.id, "improvement_cycle_completed", {"cycle_id": cycle.id, "pr_number": cycle.pr_number, "merge_commit_sha": cycle.observation.get("merge_commit_sha")})
+        if cycle.status == "running":
+            self._assert_cycle_lease(db, cycle_id, lease_token, lease_lost)
         cycle.updated_at = now()
-        cycle.lease_until = None if cycle.status != "running" else cycle.lease_until
+        cycle.lease_until = None if cycle.status != "running" else now() + timedelta(seconds=settings.task_lease_seconds)
         db.commit()
 
     async def _process_task(self, db: Session, factory: Factory, task: Task) -> None:

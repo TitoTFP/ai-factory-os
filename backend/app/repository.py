@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -110,7 +110,16 @@ def ensure_checkout(repository: Repository, token: str | None = None) -> Path:
     base = _repo_base(repository)
     base.mkdir(parents=True, exist_ok=True)
     checkout = base / "checkout"
-    if (checkout / ".git").exists():
+    if checkout.is_symlink():
+        raise RepositoryError("repository checkout cannot be a symlink")
+    if checkout.exists() and not checkout.is_dir():
+        raise RepositoryError("repository checkout must be a directory")
+    git_dir = checkout / ".git"
+    if git_dir.is_symlink():
+        raise RepositoryError("repository checkout metadata cannot be a symlink")
+    if git_dir.exists() and not git_dir.is_dir():
+        raise RepositoryError("repository checkout metadata must be a directory")
+    if git_dir.exists():
         _run_git(["fetch", "--prune", "origin"], cwd=checkout, token=token)
         return checkout
     if checkout.exists():
@@ -129,7 +138,7 @@ def create_worktree(repository: Repository, cycle_id: str, token: str | None = N
     branch = f"factory-zero/{_component(cycle_id, 'cycle identifier')[:24]}"
     path = _repo_base(repository) / "worktrees" / _component(cycle_id, "cycle identifier")
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
+    if path.exists() or path.is_symlink():
         raise RepositoryError("worktree path already exists")
     _run_git(["worktree", "add", "-b", branch, str(path), base_sha], cwd=checkout, token=token, timeout=180)
     return path, branch, base_sha
@@ -138,6 +147,10 @@ def create_worktree(repository: Repository, cycle_id: str, token: str | None = N
 def cleanup_worktree(repository: Repository, worktree: str | Path, branch: str | None = None, token: str | None = None) -> None:
     checkout = _repo_base(repository) / "checkout"
     path = Path(worktree)
+    if path.is_symlink():
+        raise RepositoryError("repository worktree cannot be a symlink")
+    if (checkout / ".git").is_symlink():
+        raise RepositoryError("repository checkout metadata cannot be a symlink")
     if (checkout / ".git").exists() and path.exists():
         _run_git(["worktree", "remove", "--force", str(path)], cwd=checkout, token=token, check=False)
     if path.exists():
@@ -196,6 +209,11 @@ def git_status(worktree: str | Path) -> dict[str, Any]:
     status = _run_git(["status", "--short"], cwd=root).stdout[-_MAX_OUTPUT:]
     diff = _run_git(["diff", "--stat"], cwd=root).stdout[-_MAX_OUTPUT:]
     return {"status": status, "diff_stat": diff}
+
+
+def git_head(worktree: str | Path) -> str:
+    root = Path(worktree).resolve()
+    return _run_git(["rev-parse", "HEAD"], cwd=root).stdout.strip()
 
 
 def git_diff(worktree: str | Path) -> dict[str, Any]:
@@ -286,6 +304,19 @@ async def create_pull_request(repository: Repository, token: str, branch: str, t
         f"/repos/{repository.owner}/{repository.name}/pulls",
         {"title": title[:240], "body": body[:20_000], "head": branch, "base": repository.default_branch, "draft": False},
     )
+
+
+async def find_pull_request(repository: Repository, token: str, branch: str) -> dict[str, Any] | None:
+    head = quote(f"{repository.owner}:{branch}", safe="")
+    result = await github_request(
+        token,
+        "GET",
+        f"/repos/{repository.owner}/{repository.name}/pulls?state=all&head={head}&per_page=100",
+    )
+    items = result.get("items")
+    if not isinstance(items, list):
+        return None
+    return next((item for item in items if isinstance(item, dict)), None)
 
 
 def _pull_number(value: int) -> int:
