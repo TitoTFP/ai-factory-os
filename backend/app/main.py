@@ -81,6 +81,20 @@ def _factory_query(model: Any, factory_id: str):
     return select(model).where(model.factory_id == factory_id)
 
 
+def _as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _as_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _usage_response(db: Session, factory: Factory) -> UsageResponse:
     row = db.execute(
         select(
@@ -96,11 +110,11 @@ def _usage_response(db: Session, factory: Factory) -> UsageResponse:
         factory_id=factory.id,
         provider=credential.provider if credential else "openai-compatible",
         model=credential.model if credential else "",
-        prompt_tokens=int(row[0] or 0),
-        completion_tokens=int(row[1] or 0),
-        total_tokens=int(row[2] or 0),
-        cost_usd=float(row[3] or 0.0),
-        requests=int(row[4] or 0),
+        prompt_tokens=_as_int(row[0]),
+        completion_tokens=_as_int(row[1]),
+        total_tokens=_as_int(row[2]),
+        cost_usd=_as_float(row[3]),
+        requests=_as_int(row[4]),
     )
 
 
@@ -164,7 +178,7 @@ def oauth_start(payload: OAuthStart, db: Session = Depends(get_db)) -> dict[str,
 
 async def _finish_oauth(provider: Literal["github", "google"], code: str, state_id: str, db: Session) -> TokenResponse:
     state = db.scalar(select(OAuthState).where(OAuthState.id == state_id, OAuthState.provider == provider))
-    if not state or state.used_at or state.expires_at < utc_now():
+    if not state or state.used_at or state.expires_at.replace(tzinfo=None) < utc_now():
         raise HTTPException(status_code=400, detail="invalid or expired OAuth state")
     redirect_uri = settings.oauth_github_redirect_uri if provider == "github" else settings.oauth_google_redirect_uri
     try:

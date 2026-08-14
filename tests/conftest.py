@@ -16,14 +16,23 @@ os.environ["RUNTIME_POLL_SECONDS"] = "0.1"
 import pytest
 from fastapi.testclient import TestClient
 
-from app.db import Base, engine
+from app.db import Base, SessionLocal, engine
 from app.main import app
+from app.models import User
 
 
 @pytest.fixture(scope="session", autouse=True)
 def database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    if TEST_DATABASE_URL:
+        db = SessionLocal()
+        db.add_all([
+            User(id=user_id, email=f"{user_id}@test.invalid", name=user_id)
+            for user_id in ("owner", "u", "u1", "u2")
+        ])
+        db.commit()
+        db.close()
     yield
     Base.metadata.drop_all(bind=engine)
     if not TEST_DATABASE_URL and TEST_DB.exists():
