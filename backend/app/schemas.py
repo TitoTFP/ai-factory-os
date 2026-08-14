@@ -47,6 +47,7 @@ class OAuthCallback(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    # pi-lens-ignore: python-hardcoded-secrets
     token_type: str = "bearer"
     user: "UserResponse"
 

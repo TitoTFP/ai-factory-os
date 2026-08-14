@@ -4,11 +4,16 @@ from logging.config import fileConfig
 import sys
 from pathlib import Path
 
+# pi-lens-ignore: reportAttributeAccessIssue
+# pi-lens-ignore: reportMissingImports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from alembic import context
+# pi-lens-ignore: reportMissingImports
+# pi-lens-ignore: reportMissingImports
 from sqlalchemy import engine_from_config, pool
 
+# pi-lens-ignore: reportMissingImports
 from app.config import settings
 from app.db import Base
 from app import models  # noqa: F401
