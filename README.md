@@ -109,7 +109,7 @@ docker compose exec -T db pg_isready -U factory -d factory
 docker compose exec -T api alembic current
 ```
 
-The API container runs migrations before Uvicorn. In production mode it fails closed when `SECRET_KEY` or `MASTER_KEY` is absent or invalid.
+The API container runs migrations before Uvicorn. A clean checkout uses development-only Compose defaults so the health and volume checks run without a local `.env`; these defaults do not enable credential-backed autonomous work. For deployed use, keep secrets in the external `.env`, set `ENVIRONMENT=production`, and the API fails closed when `SECRET_KEY` or `MASTER_KEY` is absent or invalid.
 
 ## Local development without the API container
 
