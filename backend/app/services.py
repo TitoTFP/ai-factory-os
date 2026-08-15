@@ -131,7 +131,8 @@ def _normalize_repository_tool_arguments(arguments: dict[str, Any]) -> dict[str,
     normalized = dict(arguments)
     raw_operation = normalized.get("operation")
     if isinstance(raw_operation, str):
-        match = re.match(r"\\s*(checkout|worktree|read|search|write|status|diff|commit|verify|test|build|lint|push|create_pr|merge)\\b", raw_operation)
+        operation_pattern = "|".join(re.escape(operation) for operation in sorted(_REPOSITORY_OPERATIONS, key=len, reverse=True))
+        match = re.match(rf"\s*({operation_pattern})\b", raw_operation)
         if match:
             normalized["operation"] = match.group(1)
             for field in ("path", "query", "content"):
