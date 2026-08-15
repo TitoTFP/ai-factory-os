@@ -564,8 +564,19 @@ def _json_payload(text: str) -> dict[str, Any]:
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE)
     try:
         value = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise ProviderError("provider response was not valid JSON") from exc
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        value = None
+        for match in re.finditer(r"\\{", cleaned):
+            try:
+                candidate, _ = decoder.raw_decode(cleaned[match.start():])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict):
+                value = candidate
+                break
+        if value is None:
+            raise ProviderError("provider response was not valid JSON")
     if not isinstance(value, dict):
         raise ProviderError("provider response must be a JSON object")
     return value

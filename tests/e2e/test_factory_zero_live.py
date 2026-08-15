@@ -19,8 +19,16 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
     github_token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
     if not provider_key or not github_token:
         pytest.skip("set OPENAI_API_KEY and GITHUB_TOKEN for the real Factory Zero cycle")
-    if (ROOT / "README.md").is_file() and LIVE_MARKER in (ROOT / "README.md").read_text(encoding="utf-8"):
+    if (
+        (ROOT / "README.md").is_file()
+        and LIVE_MARKER in (ROOT / "README.md").read_text(encoding="utf-8")
+        and os.getenv("FACTORY_ZERO_LIVE_FORCE") != "1"
+    ):
         pytest.skip("the real Factory Zero marker is already merged; use a new objective for another cycle")
+    objective = os.getenv(
+        "FACTORY_ZERO_LIVE_OBJECTIVE",
+        "Add the exact sentence `Factory Zero completed explicit diagnose and plan phases during its second verified self-improvement.` to README.md under the Factory Zero safety model. Do not change the meaning of any other documentation, and keep all existing tests passing.",
+    )
 
     created = client.post(
         "/api/factories",
@@ -61,7 +69,7 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
         headers=auth,
         json={
             "repository_id": repository.json()["id"],
-            "objective": "Add the exact sentence `Factory Zero completed explicit diagnose and plan phases during its second verified self-improvement.` to README.md under the Factory Zero safety model. Do not change the meaning of any other documentation, and keep all existing tests passing.",
+            "objective": objective,
         },
     )
     assert cycle.status_code == 200, cycle.text
@@ -121,7 +129,9 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
 
     audit_path = os.getenv("FACTORY_ZERO_LIVE_AUDIT_PATH")
     if audit_path:
-        Path(audit_path).write_text(
+        audit_file = Path(audit_path)
+        audit_file.parent.mkdir(parents=True, exist_ok=True)
+        audit_file.write_text(
             json.dumps(
                 {
                     "cycle": final,
