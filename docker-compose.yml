@@ -25,7 +25,7 @@ services:
       # clean checkout. Set ENVIRONMENT=production together with real secrets
       # in the external .env file for deployed use.
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      SECRET_KEY: ${SECRET_KEY:-development-only-secret-key-change-me-please-32chars}
+      SECRET_KEY: ${SECRET_KEY:-}
       MASTER_KEY: ${MASTER_KEY:-}
       FRONTEND_URL: http://localhost:5173
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
