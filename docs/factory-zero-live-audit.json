@@ -1,0 +1,2187 @@
+{
+  "cycle": {
+    "author_agent_id": "562d3d13-fcac-4327-a9c6-a059373db5f5",
+    "base_sha": "2a083ba2da284ebab89e4160a97c4e54bef6b8ab",
+    "branch_name": "factory-zero/d7b098d3-3df6-4762-81d6-",
+    "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+    "id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+    "observation": {
+      "check_runs": {
+        "conclusion": [],
+        "total": 0
+      },
+      "merge_commit_sha": "f8f9d3ee9b6587276aa94a4acb28114a4ad89665",
+      "merged": true,
+      "pre_merge_checks": {
+        "check_runs": [],
+        "total_count": 0
+      },
+      "state": "closed"
+    },
+    "phase": "completed",
+    "pr_number": 7,
+    "pr_url": "https://github.com/TitoTFP/ai-factory-os/pull/7",
+    "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+    "review_approved": true,
+    "reviewer_agent_id": "b1f6a3ec-0ae5-4207-847f-fbe1d65dfba7",
+    "status": "completed",
+    "verification_passed": true
+  },
+  "event_count": 213,
+  "event_type_counts": {
+    "github_operation_started": 6,
+    "github_operation_succeeded": 6,
+    "improvement_cycle_completed": 1,
+    "improvement_cycle_diagnosed": 1,
+    "improvement_cycle_discovered": 1,
+    "improvement_cycle_implemented": 1,
+    "improvement_cycle_merged": 1,
+    "improvement_cycle_planned": 1,
+    "improvement_cycle_queued": 1,
+    "improvement_cycle_retry": 1,
+    "improvement_cycle_reviewed": 1,
+    "improvement_cycle_started": 9,
+    "improvement_cycle_verified": 1,
+    "repository_command_started": 1,
+    "repository_command_succeeded": 1,
+    "repository_operation_failed": 1,
+    "repository_operation_started": 90,
+    "repository_operation_succeeded": 89
+  },
+  "events": [
+    {
+      "event_type": "improvement_cycle_completed",
+      "id": "13d7da11-29b5-4438-b9d4-1e3f6af4070e",
+      "payload": {
+        "base_sha": "2a083ba2da284ebab89e4160a97c4e54bef6b8ab",
+        "branch_name": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+        "merge_commit_sha": "f8f9d3ee9b6587276aa94a4acb28114a4ad89665",
+        "pr_number": 7,
+        "pr_url": "https://github.com/TitoTFP/ai-factory-os/pull/7",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "reviewer_agent_id": "b1f6a3ec-0ae5-4207-847f-fbe1d65dfba7"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "4ab69cca-6a7e-4dd3-89ca-258b6d3f4e48",
+      "payload": {
+        "attempt_id": "032a6e7c-65b1-4b10-8b28-a37d90ba75ab",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_worktree_cleanup",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "54ff44f1-d6d6-4167-9709-17edd31ad97a",
+      "payload": {
+        "attempt_id": "032a6e7c-65b1-4b10-8b28-a37d90ba75ab",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_worktree_cleanup",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "github_operation_succeeded",
+      "id": "f8245406-453f-42f5-a1e5-6aee66ffb743",
+      "payload": {
+        "attempt_id": "f3fd8e77-b8b0-4b43-a0a2-70346a044bf4",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+        "operation": "check_runs",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "result_total_count": 0
+      }
+    },
+    {
+      "event_type": "github_operation_started",
+      "id": "8ae4376e-60b2-4c17-9ace-283e7e7b6f72",
+      "payload": {
+        "attempt_id": "f3fd8e77-b8b0-4b43-a0a2-70346a044bf4",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+        "operation": "check_runs",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "github_operation_succeeded",
+      "id": "65326895-308c-4c30-a2e4-09d0df8791d9",
+      "payload": {
+        "attempt_id": "fd4a9a20-f67d-49a6-a49c-1988f07a706b",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "pull_request_get",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "result_merge_commit_sha": "f8f9d3ee9b6587276aa94a4acb28114a4ad89665",
+        "result_merged": true
+      }
+    },
+    {
+      "event_type": "github_operation_started",
+      "id": "1f58bf92-3899-45bc-a1cf-6528ecbada52",
+      "payload": {
+        "attempt_id": "fd4a9a20-f67d-49a6-a49c-1988f07a706b",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "pull_request_get",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "88a9a789-3539-438b-a384-aa2ab9d40f05",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_merged",
+      "id": "059e2ddf-54d9-4363-9f1f-fb3f458cde47",
+      "payload": {
+        "base_sha": "2a083ba2da284ebab89e4160a97c4e54bef6b8ab",
+        "branch_name": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+        "pr_number": 7,
+        "pr_url": "https://github.com/TitoTFP/ai-factory-os/pull/7",
+        "reconciled": false,
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "reviewer_agent_id": "b1f6a3ec-0ae5-4207-847f-fbe1d65dfba7"
+      }
+    },
+    {
+      "event_type": "github_operation_succeeded",
+      "id": "2eb60b4f-b7a7-4f6e-b3e5-65a9d1d3f634",
+      "payload": {
+        "attempt_id": "b8f7bc2f-5da4-4dd6-93d9-285684efd262",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+        "operation": "pull_request_merge",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "result_merged": true
+      }
+    },
+    {
+      "event_type": "github_operation_started",
+      "id": "9406e2e8-91f8-4870-a4d9-0bf9626f00b9",
+      "payload": {
+        "attempt_id": "b8f7bc2f-5da4-4dd6-93d9-285684efd262",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+        "operation": "pull_request_merge",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "github_operation_succeeded",
+      "id": "1b3c37f3-1160-4c31-a3c6-dd026a442e5f",
+      "payload": {
+        "attempt_id": "975d6f20-a2a5-4484-8db4-f7d8574225e2",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+        "operation": "check_runs",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "result_total_count": 0
+      }
+    },
+    {
+      "event_type": "github_operation_started",
+      "id": "80ae9cff-088b-4542-a120-1f68a39231be",
+      "payload": {
+        "attempt_id": "975d6f20-a2a5-4484-8db4-f7d8574225e2",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "head_sha": "3d32f28b41f1eafe86f075888f5d67716a01ee06",
+        "operation": "check_runs",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "github_operation_succeeded",
+      "id": "55c6ee0e-607f-48f5-a671-d3b897f7ef32",
+      "payload": {
+        "attempt_id": "cd761623-b91d-4b08-8e57-b44bb8d0a4fe",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "pull_request_create",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "result_merge_commit_sha": null,
+        "result_merged": false
+      }
+    },
+    {
+      "event_type": "github_operation_started",
+      "id": "f152dcf5-2f1f-428d-aeb3-3bbdf8b53c7a",
+      "payload": {
+        "attempt_id": "cd761623-b91d-4b08-8e57-b44bb8d0a4fe",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "pull_request_create",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "github_operation_succeeded",
+      "id": "fbfd2804-8015-49ef-9ca3-d4f78a4b86dc",
+      "payload": {
+        "attempt_id": "b678cf4f-a1bc-4d62-8353-a49f0b83fdc6",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "pull_request_find",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "github_operation_started",
+      "id": "e8aef771-a169-4b09-9e8f-093f44d91f7a",
+      "payload": {
+        "attempt_id": "b678cf4f-a1bc-4d62-8353-a49f0b83fdc6",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "pull_request_find",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "ddd2000d-75a1-4621-a69f-91d16aacae51",
+      "payload": {
+        "attempt_id": "a3afd390-0c48-4178-8c25-f8b366a1bbc9",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_push",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "4337aec3-95ca-4f5c-867a-f48ff4d68ba7",
+      "payload": {
+        "attempt_id": "a3afd390-0c48-4178-8c25-f8b366a1bbc9",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_push",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "5ffca399-536f-417b-b0e5-1bc3eabf44b3",
+      "payload": {
+        "attempt_id": "0b5130c9-0101-46bc-9345-f1b51cdd06ca",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_commit",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "6c22c11e-84e7-47bc-9646-36efee9f20bd",
+      "payload": {
+        "attempt_id": "0b5130c9-0101-46bc-9345-f1b51cdd06ca",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_commit",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "83f4dffe-cc88-4cbd-b407-157e6f10410b",
+      "payload": {
+        "attempt_id": "3c9505ba-e125-49a7-b6e9-a9b3bc1e55ce",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_head",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "f0419529-ebd2-4c9d-8719-4d4c4d800342",
+      "payload": {
+        "attempt_id": "3c9505ba-e125-49a7-b6e9-a9b3bc1e55ce",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_head",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "3ae5bb41-9229-4b39-8f14-bdd17c35dc0f",
+      "payload": {
+        "attempt_id": "21134828-9b65-445f-817c-cde8e3f69c3f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "181aaff8-22a1-4628-84e9-42b2ee8680a2",
+      "payload": {
+        "attempt_id": "21134828-9b65-445f-817c-cde8e3f69c3f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "516cc4f6-c416-478d-94f5-0964739f9c21",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_reviewed",
+      "id": "2b9cf26a-77cc-4d58-b1fd-9e44c59a54c6",
+      "payload": {
+        "approved": true,
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "reviewer_agent_id": "b1f6a3ec-0ae5-4207-847f-fbe1d65dfba7"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "5ebe0c18-388c-4e25-8f60-5d345788637d",
+      "payload": {
+        "attempt_id": "396b91e0-1247-49e0-be70-866fc408a1dd",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "dd1c0186-0245-41a1-97b7-09ca42a2a271",
+      "payload": {
+        "attempt_id": "396b91e0-1247-49e0-be70-866fc408a1dd",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "f70ee314-3525-4b36-9db0-b6fb78e67738",
+      "payload": {
+        "attempt_id": "bb71a9e5-fbb9-4fe8-9be0-f39d8f01f8bc",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "d0644980-691c-4654-bb5d-64d52a658eb7",
+      "payload": {
+        "attempt_id": "bb71a9e5-fbb9-4fe8-9be0-f39d8f01f8bc",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "d9183c8d-db09-4816-9647-5721655322cc",
+      "payload": {
+        "attempt_id": "3ee0f42b-a938-4a9b-ba6f-7c10155b1cf3",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "be261b7f-63d9-43d7-9081-553693a7e7b8",
+      "payload": {
+        "attempt_id": "3ee0f42b-a938-4a9b-ba6f-7c10155b1cf3",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "54fd7c54-e066-41b2-ba84-20819a6582c3",
+      "payload": {
+        "attempt_id": "0dfb0d47-897b-4ef6-9e8c-eef85ecd38ad",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "0273eafb-c534-4d5c-8932-19465d2763cc",
+      "payload": {
+        "attempt_id": "0dfb0d47-897b-4ef6-9e8c-eef85ecd38ad",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "2f9c67f2-3b72-4009-aed9-b4676973394d",
+      "payload": {
+        "attempt_id": "0061f033-01b8-4a0c-bf59-f2b195f99e8f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "da083092-7045-403f-b4b1-49bdce7b67c9",
+      "payload": {
+        "attempt_id": "0061f033-01b8-4a0c-bf59-f2b195f99e8f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "73fa77ad-8c6c-40c7-af61-9dcfbd89f942",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_verified",
+      "id": "f9a47265-2935-40ff-8a71-7d52d507af87",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "passed": true
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "98291e7d-ea1d-4290-89ee-dc11d1eb7c19",
+      "payload": {
+        "attempt_id": "687a3fc1-eb89-4234-8442-9306d0504d22",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "1129ac12-a69a-4822-af22-39f87c78fb69",
+      "payload": {
+        "attempt_id": "687a3fc1-eb89-4234-8442-9306d0504d22",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "f7c48b2b-5983-4e59-bbcb-f128ea2e8534",
+      "payload": {
+        "attempt_id": "4e2a6d9a-77e5-42b2-8514-febe77fc2e35",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "kind": "lint",
+        "operation": "configured_commands",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "result_passed": true
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "279cd44d-850a-4483-849a-a5c4f3df7f73",
+      "payload": {
+        "attempt_id": "4e2a6d9a-77e5-42b2-8514-febe77fc2e35",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "kind": "lint",
+        "operation": "configured_commands",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "aa0b69b3-9ef6-48f0-81f8-9344f0961206",
+      "payload": {
+        "attempt_id": "136629c3-bf9f-4660-82e6-2d8c79bd2880",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "kind": "build",
+        "operation": "configured_commands",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "result_passed": true
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "ffdbe929-0c33-4a31-90e4-a2fcca38cfd7",
+      "payload": {
+        "attempt_id": "136629c3-bf9f-4660-82e6-2d8c79bd2880",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "kind": "build",
+        "operation": "configured_commands",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "d2766359-8d38-4331-9bfe-d340a2feaab1",
+      "payload": {
+        "attempt_id": "546c18b0-fee8-46c4-b7e1-487fa8738081",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "kind": "test",
+        "operation": "configured_commands",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "result_passed": true
+      }
+    },
+    {
+      "event_type": "repository_command_succeeded",
+      "id": "5c78780d-aa88-4f0c-8dd2-3ebde667b04e",
+      "payload": {
+        "attempt_id": "adbb151b-1d3f-4b7e-99f5-92222500d3fa",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "kind": "test",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_command_started",
+      "id": "43e2a245-9086-4f8b-b152-ee54a9a214ba",
+      "payload": {
+        "attempt_id": "adbb151b-1d3f-4b7e-99f5-92222500d3fa",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "kind": "test",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "a42edb7d-f2ed-481a-8fcd-153b7774c4cf",
+      "payload": {
+        "attempt_id": "546c18b0-fee8-46c4-b7e1-487fa8738081",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "kind": "test",
+        "operation": "configured_commands",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "308d6faa-1b28-450e-8b7b-1a26364c602f",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_implemented",
+      "id": "04cd6e51-e08f-4252-99fb-a14384ee74df",
+      "payload": {
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "153f7d63-dc17-4128-bea6-c963001595f3",
+      "payload": {
+        "attempt_id": "0c0294b2-0dac-47cb-9e09-96b57484e91c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "f0fe184c-a274-4098-9981-debdd6d536be",
+      "payload": {
+        "attempt_id": "0c0294b2-0dac-47cb-9e09-96b57484e91c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "f03340e8-7259-459d-bb77-08bbe6894340",
+      "payload": {
+        "attempt_id": "7fe0f633-e38e-4fe9-9a1f-2bf504a51fe1",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "e41781d2-15d3-43e0-a7fe-80257d07080a",
+      "payload": {
+        "attempt_id": "7fe0f633-e38e-4fe9-9a1f-2bf504a51fe1",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "f6ab236b-3328-4a1a-ab6d-d3c8b446e8ec",
+      "payload": {
+        "attempt_id": "8033a310-eb8d-4f5e-91d7-60b2976b22c5",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "write",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "9468f556-ddd7-43a0-985d-67dd5e0564dc",
+      "payload": {
+        "attempt_id": "8033a310-eb8d-4f5e-91d7-60b2976b22c5",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "write",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "0203bbfa-6774-4cf4-bdb0-c31a98c3081f",
+      "payload": {
+        "attempt_id": "6b27dffd-a11f-4d49-ad37-17c6bce7a05c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "5dcada48-dbe6-4f67-80fb-2be9f6a36d13",
+      "payload": {
+        "attempt_id": "6b27dffd-a11f-4d49-ad37-17c6bce7a05c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "22873954-6705-4769-a0c8-164f1cf5ed1d",
+      "payload": {
+        "attempt_id": "7a0cf812-61c6-4901-8d14-aacd780d9654",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "04c7a04a-7265-4ae3-86b0-db86f52ec4e9",
+      "payload": {
+        "attempt_id": "7a0cf812-61c6-4901-8d14-aacd780d9654",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "0bb2571a-f7ca-4493-bad7-2d91915ca67e",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_planned",
+      "id": "4fca56d4-c04c-4551-a1c4-e01ba223b4ae",
+      "payload": {
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "19a63dfd-e684-4794-8329-8edfaf717f1a",
+      "payload": {
+        "attempt_id": "7f5652dc-ac5a-40a1-aeca-f276f65db6ae",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "6cf28b0c-1edd-4b13-bb8b-e08b77ca0f63",
+      "payload": {
+        "attempt_id": "7f5652dc-ac5a-40a1-aeca-f276f65db6ae",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "46598e03-620f-4c06-bba7-3138c0082a04",
+      "payload": {
+        "attempt_id": "641ea2ad-6165-41bb-aa1a-38da1b2a4a39",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "345a5dd3-b000-49f9-813e-75068507657a",
+      "payload": {
+        "attempt_id": "641ea2ad-6165-41bb-aa1a-38da1b2a4a39",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "d0c5f3a5-3d36-45be-9a74-0baeacb4f317",
+      "payload": {
+        "attempt_id": "e603639e-113c-4f19-8416-f3e099e96550",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "16251257-56ba-42b1-b81a-17886a69a4e7",
+      "payload": {
+        "attempt_id": "e603639e-113c-4f19-8416-f3e099e96550",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "648389d7-a891-4b2e-92d4-8b600a1eb874",
+      "payload": {
+        "attempt_id": "05c4eca8-ba4b-4d5c-b248-7ebb1e28becd",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "8e0a8a88-ddd7-458c-9eaf-a7b60044d2f3",
+      "payload": {
+        "attempt_id": "05c4eca8-ba4b-4d5c-b248-7ebb1e28becd",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "7d93714f-3721-424d-b666-b2513be0dfdf",
+      "payload": {
+        "attempt_id": "b94dfc3a-99e5-404e-bcfd-5bd712a1e456",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "7b9093f3-6a2c-4d20-a8cb-68f78c73f31b",
+      "payload": {
+        "attempt_id": "b94dfc3a-99e5-404e-bcfd-5bd712a1e456",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "71564b5e-ae0e-4d59-b96c-f76d35e68078",
+      "payload": {
+        "attempt_id": "d8efae3d-ca83-4c75-9d9a-ffadaa691e0f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "92c5bfef-9306-48fc-be83-24c5148a274d",
+      "payload": {
+        "attempt_id": "d8efae3d-ca83-4c75-9d9a-ffadaa691e0f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "eb73a18d-6447-41b7-a86d-cae352a5c5c8",
+      "payload": {
+        "attempt_id": "7a795338-2471-4712-968b-547e3e9074bc",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "04e16eab-bbc0-4655-b705-ba13e352df4a",
+      "payload": {
+        "attempt_id": "7a795338-2471-4712-968b-547e3e9074bc",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "79a60ceb-688f-452a-a0ea-53c6a82ba37e",
+      "payload": {
+        "attempt_id": "8b6551dc-9eb7-4d2b-9155-918d4667fa1b",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "b8493be0-102e-4f05-a6f5-396ad8f2dfce",
+      "payload": {
+        "attempt_id": "8b6551dc-9eb7-4d2b-9155-918d4667fa1b",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "253285cc-efc8-45db-8bf2-8c21efb200d8",
+      "payload": {
+        "attempt_id": "cfeb94e4-fcba-4ea9-9bcc-5ad8bc70bf95",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "37c2140e-28ad-47c0-8508-7b16b22d2757",
+      "payload": {
+        "attempt_id": "cfeb94e4-fcba-4ea9-9bcc-5ad8bc70bf95",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "a380b71d-7d4c-4e6f-81be-717c4be32e7d",
+      "payload": {
+        "attempt_id": "2c077ef2-babb-4dee-a4e6-a084cf5ea357",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "fea9d544-189e-4f1e-b6ba-8320fe7f2b7f",
+      "payload": {
+        "attempt_id": "2c077ef2-babb-4dee-a4e6-a084cf5ea357",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "8dac5d84-47c4-4a71-8f7f-2a8eaea7fb14",
+      "payload": {
+        "attempt_id": "356cfaec-ec2a-42d4-8d94-80d69af65a2b",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "ad3da5bf-c43b-482f-af63-2104c0554577",
+      "payload": {
+        "attempt_id": "356cfaec-ec2a-42d4-8d94-80d69af65a2b",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "1a2bc3ec-5e2b-4144-b675-d1e57ab2cd74",
+      "payload": {
+        "attempt_id": "9328ce6c-0ced-4d37-9b47-2b72517c932c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "02a4594f-bc37-4785-8a9a-e52a87e77d3a",
+      "payload": {
+        "attempt_id": "9328ce6c-0ced-4d37-9b47-2b72517c932c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "65caf0a0-bbef-49ea-899e-9416de31829c",
+      "payload": {
+        "attempt_id": "8bc9e6f6-c6fd-4e19-bd19-811338d404c1",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "d23883cc-9cdf-4be4-aab9-2277a90ca692",
+      "payload": {
+        "attempt_id": "8bc9e6f6-c6fd-4e19-bd19-811338d404c1",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "c1542c78-a0f7-4147-b841-7146d765fe80",
+      "payload": {
+        "attempt_id": "d2b5ec77-5e33-4109-98be-df923f1fa3eb",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "db7b09f0-9982-4e55-9f4e-1c82f8bb7229",
+      "payload": {
+        "attempt_id": "d2b5ec77-5e33-4109-98be-df923f1fa3eb",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "392bf1a1-4985-4dd8-9155-9a22e15e4165",
+      "payload": {
+        "attempt_id": "ec953988-dcab-4342-a6ca-86f344487407",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "781c5b4b-f87d-48c2-b726-af46e3e70baa",
+      "payload": {
+        "attempt_id": "ec953988-dcab-4342-a6ca-86f344487407",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "74ffa8c9-198f-4c48-9d60-6f442387f12f",
+      "payload": {
+        "attempt_id": "2ba39a4a-8ad9-48e6-9492-ef4d0945c648",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "a52b8e8d-83c2-4b69-b54c-744e26228662",
+      "payload": {
+        "attempt_id": "2ba39a4a-8ad9-48e6-9492-ef4d0945c648",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "94297e74-f5fb-4fda-867b-8e200699ed78",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_diagnosed",
+      "id": "ee73f885-5c72-4364-a89a-7c1f8b0459b2",
+      "payload": {
+        "base_sha": "2a083ba2da284ebab89e4160a97c4e54bef6b8ab",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "ec25fff4-4538-4b52-a3e9-1cd3aae52388",
+      "payload": {
+        "attempt_id": "9b37814a-987b-48c0-aac3-02c3a9d83248",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "1683e7cb-4936-4f02-91fe-d5db0b3d3111",
+      "payload": {
+        "attempt_id": "9b37814a-987b-48c0-aac3-02c3a9d83248",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "93d5cb9c-8be9-47ea-8b8c-647fc2233592",
+      "payload": {
+        "attempt_id": "a1203e52-032e-4fe8-a869-9270fee5c0b9",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "ceeefb2b-d0ad-4c9b-9dc6-849d1e418191",
+      "payload": {
+        "attempt_id": "a1203e52-032e-4fe8-a869-9270fee5c0b9",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "89eef148-7e75-4890-ab72-d4938ef3746b",
+      "payload": {
+        "attempt_id": "74f715c3-e87e-48e9-90b1-94f86612341a",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "7bacecf0-da2f-4057-babb-053bc467f76a",
+      "payload": {
+        "attempt_id": "74f715c3-e87e-48e9-90b1-94f86612341a",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "3e0d4d3a-d6ae-43c2-b1ac-a044e2bcc30b",
+      "payload": {
+        "attempt_id": "4cb2421a-6e49-4e23-a47c-7f1f18239096",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "d0e36260-c7fd-4d52-afe3-dc50174665cd",
+      "payload": {
+        "attempt_id": "4cb2421a-6e49-4e23-a47c-7f1f18239096",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "8f00a5f0-a502-49a8-b500-23ab9f308c70",
+      "payload": {
+        "attempt_id": "783b71fd-93cf-4fcc-a5b8-f8fac010f110",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "a401b9a8-f13b-4176-a942-d8ff42788dba",
+      "payload": {
+        "attempt_id": "783b71fd-93cf-4fcc-a5b8-f8fac010f110",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "8d2d434e-b0ae-4c52-b9d8-24f6a9b4cc5b",
+      "payload": {
+        "attempt_id": "35e1bbca-852c-4167-a283-84206d4844c3",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "5c9431c8-b925-4bd5-9399-669091d75fff",
+      "payload": {
+        "attempt_id": "35e1bbca-852c-4167-a283-84206d4844c3",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "79235531-75e0-45de-81e0-983732a41ed3",
+      "payload": {
+        "attempt_id": "5031c71b-f31a-43a6-8ff8-98405ab5f768",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "435ec157-cd5a-4711-a787-4cabd18917a3",
+      "payload": {
+        "attempt_id": "5031c71b-f31a-43a6-8ff8-98405ab5f768",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "06424983-a57c-401a-abf8-e585a9ae24a0",
+      "payload": {
+        "attempt_id": "bd03c9dd-c48d-483b-a81e-f4fd2b967171",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "6f96d19d-888f-4ab3-8fe9-9459a5b32159",
+      "payload": {
+        "attempt_id": "bd03c9dd-c48d-483b-a81e-f4fd2b967171",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "30599564-326a-43cb-a814-6831cdefa373",
+      "payload": {
+        "attempt_id": "9e1001dd-8919-42ea-98c1-c37086fbda13",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "5bef4f04-b609-41f9-886c-225393f5539a",
+      "payload": {
+        "attempt_id": "9e1001dd-8919-42ea-98c1-c37086fbda13",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "4ab130d6-bf0e-4b04-a8a6-f3bfeb4acee6",
+      "payload": {
+        "attempt_id": "e13cf20d-d742-4ceb-bb71-5970abe1753d",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "97115f70-e456-401c-9e01-b5fe1b9ec07b",
+      "payload": {
+        "attempt_id": "e13cf20d-d742-4ceb-bb71-5970abe1753d",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "a90c820d-401a-4ecd-9613-a9badaa9b136",
+      "payload": {
+        "attempt_id": "7c6e96f3-1ea0-4fe8-bb91-2a79688ec621",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "25935075-a919-4f59-bc8a-baf557ca6d99",
+      "payload": {
+        "attempt_id": "7c6e96f3-1ea0-4fe8-bb91-2a79688ec621",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "1e187165-9c0b-42ba-ac58-aef6c081c859",
+      "payload": {
+        "attempt_id": "b0f7c06e-4dca-40a0-9b8c-ba2cf37f0895",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "727aaa35-4f82-4b73-a42c-e5ad52777d79",
+      "payload": {
+        "attempt_id": "b0f7c06e-4dca-40a0-9b8c-ba2cf37f0895",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "830adbe4-42ff-4804-ad6e-9e0a837d024d",
+      "payload": {
+        "attempt_id": "c7fa9117-ec3f-4b14-9caa-9dc0597801a2",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "452cf33c-8289-4672-99ad-ff7a4ac8a082",
+      "payload": {
+        "attempt_id": "c7fa9117-ec3f-4b14-9caa-9dc0597801a2",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "1a084e00-c7ae-4192-addb-729f0ca21b58",
+      "payload": {
+        "attempt_id": "bca1f352-cf5c-4292-9b17-dd340bf089e1",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "256cca04-1fad-48e5-9e6c-6c6972a67c2f",
+      "payload": {
+        "attempt_id": "bca1f352-cf5c-4292-9b17-dd340bf089e1",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "f631be99-471f-4310-a1b0-ad29f6df9c6c",
+      "payload": {
+        "attempt_id": "09800335-ea35-4972-9b9f-b37021163985",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "3d0894aa-8d31-46c7-8fdc-73901fe897cf",
+      "payload": {
+        "attempt_id": "09800335-ea35-4972-9b9f-b37021163985",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "00085d24-1634-460a-ba02-499f334c174e",
+      "payload": {
+        "attempt_id": "a6e30535-babd-4d3a-8319-930553c8cce4",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "7711c442-79e5-4404-b1a2-cb2426423b62",
+      "payload": {
+        "attempt_id": "a6e30535-babd-4d3a-8319-930553c8cce4",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "9d56c35f-f0e5-4a23-85f4-ded39293e76e",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_discovered",
+      "id": "e563ccf5-1c95-4bb1-8341-bebbb9a7c7ac",
+      "payload": {
+        "base_sha": "2a083ba2da284ebab89e4160a97c4e54bef6b8ab",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "a0ba6f0c-6ac4-4c86-80ee-f014b4b480f3",
+      "payload": {
+        "attempt_id": "f90b6867-ebf0-404e-9f9c-4a2ed9b67201",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "d55e47c4-5f15-4a36-9592-e38bf5c022ae",
+      "payload": {
+        "attempt_id": "f90b6867-ebf0-404e-9f9c-4a2ed9b67201",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "5f8b5d88-8b93-4275-bdbd-4864b5227f28",
+      "payload": {
+        "attempt_id": "5c615db1-f53f-47ef-8ff2-9f063be385e3",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "2b16c403-f14e-4317-a2dd-eda219be112b",
+      "payload": {
+        "attempt_id": "5c615db1-f53f-47ef-8ff2-9f063be385e3",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "0347e3c3-43a5-4c1d-8ef2-820de5021272",
+      "payload": {
+        "attempt_id": "57f1cacb-a675-4660-a6dd-30e6b5f84d24",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "d225bbf3-f2bd-4f70-99a1-504b418dea7b",
+      "payload": {
+        "attempt_id": "57f1cacb-a675-4660-a6dd-30e6b5f84d24",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "a0823aa9-49ec-4c18-8577-882d3504f991",
+      "payload": {
+        "attempt_id": "5d313f84-7a78-45a4-9fd4-1fa3a546a0bb",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "b4244e84-04f6-45f8-9bec-147821b8ecfb",
+      "payload": {
+        "attempt_id": "5d313f84-7a78-45a4-9fd4-1fa3a546a0bb",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "7a545bba-c698-4871-be45-393cb846022c",
+      "payload": {
+        "attempt_id": "4caa6581-b742-40ed-87af-a41c12f142ab",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "93ecef57-f320-4d23-9874-59579e9d76d4",
+      "payload": {
+        "attempt_id": "4caa6581-b742-40ed-87af-a41c12f142ab",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "f497e7f4-7128-48fb-8e1e-796ff9ca31a8",
+      "payload": {
+        "attempt_id": "23a69df0-de94-4e17-a520-1c6db01d9f7a",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "dcc47b05-7082-4806-aa33-a89a8255f071",
+      "payload": {
+        "attempt_id": "23a69df0-de94-4e17-a520-1c6db01d9f7a",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "2e9625bd-ce58-4cef-b71a-b90e1eb436fa",
+      "payload": {
+        "attempt_id": "5dbbc964-195a-4db4-bb69-0d33982a5214",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "5d1f7a1f-baba-4d0f-a847-c216e973157e",
+      "payload": {
+        "attempt_id": "5dbbc964-195a-4db4-bb69-0d33982a5214",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "7fd2de8f-3e5d-4ce2-b80c-6acfe2ba0b3a",
+      "payload": {
+        "attempt_id": "b9d8fbac-704a-48ad-ace7-47c35c91dc5a",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "cc1d60fc-3426-42f5-8a99-b7a593b12773",
+      "payload": {
+        "attempt_id": "b9d8fbac-704a-48ad-ace7-47c35c91dc5a",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "f389fb81-1496-47d7-b93d-7cba8e3ae640",
+      "payload": {
+        "attempt_id": "879da4c4-6ced-42bf-b56d-b3d1f4b019e7",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "74150c81-ec91-4ef0-9427-cc16d9b1e2d6",
+      "payload": {
+        "attempt_id": "879da4c4-6ced-42bf-b56d-b3d1f4b019e7",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "3787afc6-c71a-4612-9722-b2dec684aa03",
+      "payload": {
+        "attempt_id": "de1104a0-8669-4b89-9ddd-546388be5fc6",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "2e94028a-9281-4154-a33a-deebab3aac89",
+      "payload": {
+        "attempt_id": "de1104a0-8669-4b89-9ddd-546388be5fc6",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "c24419c6-c0ea-4a87-a98d-1a3a96711132",
+      "payload": {
+        "attempt_id": "4472c956-945b-4f47-bb8d-ff2592621d4f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "930fa7b4-0c2b-49cc-9db3-8518b0847c7a",
+      "payload": {
+        "attempt_id": "4472c956-945b-4f47-bb8d-ff2592621d4f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "8b2d2e17-73ed-4873-80d6-542a8f121495",
+      "payload": {
+        "attempt_id": "0f2359b6-4445-494c-bf39-1afa2f72a7cd",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "7ef214f7-2800-45e3-a6e3-d14d976f7c0e",
+      "payload": {
+        "attempt_id": "0f2359b6-4445-494c-bf39-1afa2f72a7cd",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "b65878e9-489b-421a-ae54-0b9f9cccd020",
+      "payload": {
+        "attempt_id": "df3b68fb-aae2-4522-b9d0-beb23729b51c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "384e21a9-0b5a-4db5-b9bd-6ec228f8801f",
+      "payload": {
+        "attempt_id": "df3b68fb-aae2-4522-b9d0-beb23729b51c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "39f504a8-88cc-4880-a32c-1960f74c5971",
+      "payload": {
+        "attempt_id": "363824e7-cf33-4de8-83b7-c601c7618fbf",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "233ba0b1-7ee5-4228-bf55-9dfc8c920fee",
+      "payload": {
+        "attempt_id": "363824e7-cf33-4de8-83b7-c601c7618fbf",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "f94d8377-33ee-4040-b015-9752f877ef61",
+      "payload": {
+        "attempt_id": "1979b421-df02-4bcc-a967-777233482ec4",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "b6ff7d64-0031-430a-9d53-3969a2f2187f",
+      "payload": {
+        "attempt_id": "1979b421-df02-4bcc-a967-777233482ec4",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "59b2d168-a1a8-4460-add7-3b9bd455f423",
+      "payload": {
+        "attempt_id": "d49a9647-7c14-45b8-8321-15ac476bbeac",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "79f0d19f-b15a-4177-98ea-48df5318b23d",
+      "payload": {
+        "attempt_id": "d49a9647-7c14-45b8-8321-15ac476bbeac",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "4b130d0a-00d5-4cd5-8bc4-85f40beaa328",
+      "payload": {
+        "attempt_id": "725e0387-4c86-4679-9e69-177f81287be8",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "333b5841-f87b-4a48-b67b-de057448a3bb",
+      "payload": {
+        "attempt_id": "725e0387-4c86-4679-9e69-177f81287be8",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "a5dc7d36-262b-4f0a-89f2-9f9359dd3bd7",
+      "payload": {
+        "attempt_id": "15f92537-6879-453e-8d4a-d27ba4bdb981",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "df8a93de-d2ae-49b1-83ed-637120516bdd",
+      "payload": {
+        "attempt_id": "15f92537-6879-453e-8d4a-d27ba4bdb981",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "7b423ef5-e60d-4dea-81f9-40799edaa8d5",
+      "payload": {
+        "attempt_id": "4a0ef885-41b6-4285-9f9c-d5d3f59b32f2",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "2c65f3bf-d85c-4735-88e3-04f10fcfb827",
+      "payload": {
+        "attempt_id": "4a0ef885-41b6-4285-9f9c-d5d3f59b32f2",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "bc3dfa84-dd1c-4b70-acb5-682eace15afd",
+      "payload": {
+        "attempt_id": "0f72cbcd-ad7c-4031-a815-760fffe85d24",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "58862319-dc13-46e0-9859-4f6ba9542651",
+      "payload": {
+        "attempt_id": "0f72cbcd-ad7c-4031-a815-760fffe85d24",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "0a41662f-fd48-43ea-92cf-100c1b817ccf",
+      "payload": {
+        "attempt_id": "02cdf70a-ae56-466f-a894-f01076e708cd",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "587b10b5-e3d2-4dc0-bebc-6348736f3dbf",
+      "payload": {
+        "attempt_id": "02cdf70a-ae56-466f-a894-f01076e708cd",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "f21e2dcb-4d71-40b1-a343-bd728d57d800",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_retry",
+      "id": "e17d0e7e-b9f6-4fd0-8144-37f21ce8ebd7",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "repository_operation_failed",
+      "id": "18f36f98-2bf4-4673-a14f-3fd005c0babe",
+      "payload": {
+        "attempt_id": "696ceeb8-abc1-4834-89e6-366cbe9faf1f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "02783d3b-971a-47c9-8eaf-fce542b1d67c",
+      "payload": {
+        "attempt_id": "696ceeb8-abc1-4834-89e6-366cbe9faf1f",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "2767e805-5c34-4817-95eb-400101c022d1",
+      "payload": {
+        "attempt_id": "7d8f2853-9b26-421f-9600-cbf312c2850d",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "52bf6bb5-47d0-4862-b447-f0a5a752656d",
+      "payload": {
+        "attempt_id": "7d8f2853-9b26-421f-9600-cbf312c2850d",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "4b863032-f98a-4651-9a30-fad8c861bd63",
+      "payload": {
+        "attempt_id": "125e75f1-e1f8-453a-9ef9-1f2172add29e",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "c9a09417-4543-40eb-a451-c9647f794d61",
+      "payload": {
+        "attempt_id": "125e75f1-e1f8-453a-9ef9-1f2172add29e",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "e3378fe4-84fc-4ba2-b69b-336322f45c13",
+      "payload": {
+        "attempt_id": "76190cd7-6eb9-46dd-bf98-6cf0d4ebf1d2",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "78e633ad-2957-47b2-b36d-58ee49d3b9c8",
+      "payload": {
+        "attempt_id": "76190cd7-6eb9-46dd-bf98-6cf0d4ebf1d2",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "2581bb22-0853-4834-83a2-c23dbe59414d",
+      "payload": {
+        "attempt_id": "48963cbe-50ce-485a-b2dd-b8ac4fa64184",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "ddd42d6e-f217-4226-8b07-f3735b635bb1",
+      "payload": {
+        "attempt_id": "48963cbe-50ce-485a-b2dd-b8ac4fa64184",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "5e536538-3ac8-45b8-a779-2a7dbe62aa9e",
+      "payload": {
+        "attempt_id": "782fe10e-e8c4-41e4-beed-ae3f06821af6",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "3a9a28df-1891-40f1-8561-40670a70c403",
+      "payload": {
+        "attempt_id": "782fe10e-e8c4-41e4-beed-ae3f06821af6",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "3aa8f509-4ef9-4b10-b502-b0a30e29c5b3",
+      "payload": {
+        "attempt_id": "8bc2ff81-a1ed-4891-bea2-cfaa1def8187",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "e0818a77-dd6b-4768-b766-83ecf36425c7",
+      "payload": {
+        "attempt_id": "8bc2ff81-a1ed-4891-bea2-cfaa1def8187",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "dd6ab372-e63f-493b-9a70-613441a4c68b",
+      "payload": {
+        "attempt_id": "3088ab52-b0f8-40c4-ad19-28b5490ae441",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "415c50b6-005c-4731-9b59-1cf8577441a9",
+      "payload": {
+        "attempt_id": "3088ab52-b0f8-40c4-ad19-28b5490ae441",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "cd1d5072-9c0b-44aa-be18-5eb799b76e78",
+      "payload": {
+        "attempt_id": "703cdf6e-7767-40ff-a11c-a69f3c7f1f6a",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "36b72179-1335-4500-bc71-84f7a51f2f12",
+      "payload": {
+        "attempt_id": "703cdf6e-7767-40ff-a11c-a69f3c7f1f6a",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "diff",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "fe90d3bc-b24b-4a2d-b8eb-78c25e02f9b1",
+      "payload": {
+        "attempt_id": "9e7094b2-71fc-4626-a3fd-d8d22975ed58",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "20ed3a52-b040-424f-8149-28069933176a",
+      "payload": {
+        "attempt_id": "9e7094b2-71fc-4626-a3fd-d8d22975ed58",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "29692d5e-df4b-44fc-8097-9b2f522ab8ac",
+      "payload": {
+        "attempt_id": "ec0f9a00-278b-45bb-82cc-0b0da4d6c61b",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "b522e65b-2cf2-4fd0-b737-bc7959a2078e",
+      "payload": {
+        "attempt_id": "ec0f9a00-278b-45bb-82cc-0b0da4d6c61b",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "c7cdaba3-10df-4f2a-ae4d-1c912db31e3e",
+      "payload": {
+        "attempt_id": "fac7e045-e635-4cce-b97a-936183a205fb",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "a935a981-5811-4cf2-b7a1-dbb655cb985e",
+      "payload": {
+        "attempt_id": "fac7e045-e635-4cce-b97a-936183a205fb",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "5a7cc2c8-b912-4cc2-af6a-d33f1c757b9e",
+      "payload": {
+        "attempt_id": "9a99d92d-bcae-433a-a6b6-8dd6953b6c17",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "b7496dbb-7bdd-46ba-9ebc-c892eb122324",
+      "payload": {
+        "attempt_id": "9a99d92d-bcae-433a-a6b6-8dd6953b6c17",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "798179af-7dc7-4403-9a5e-b5327a622f28",
+      "payload": {
+        "attempt_id": "3a28156e-73e2-44ff-90aa-4b8c9fee9d3c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "ed707cc8-bd86-44cf-a87d-4c85dee34673",
+      "payload": {
+        "attempt_id": "3a28156e-73e2-44ff-90aa-4b8c9fee9d3c",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "search",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "e5973554-756e-41fe-9658-76bdcbef1a3f",
+      "payload": {
+        "attempt_id": "9b57c0a5-feeb-419b-bf62-aed7c678240d",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "7f0ac4f7-c4b3-41a7-af9e-a11e3f2db5bd",
+      "payload": {
+        "attempt_id": "9b57c0a5-feeb-419b-bf62-aed7c678240d",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "8c4d04b4-a62f-43b4-860e-dff82a9ad7d3",
+      "payload": {
+        "attempt_id": "3b583089-be6d-41f0-9179-b2887cbf2157",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "3dd06492-4654-4bc9-ba34-54e491882c4e",
+      "payload": {
+        "attempt_id": "3b583089-be6d-41f0-9179-b2887cbf2157",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "read",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "89b63b60-1391-4594-82aa-7606a73030ae",
+      "payload": {
+        "attempt_id": "e604e5b2-6c15-4b58-980f-b06bcdfcd7e6",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "392bc162-0e3d-4bc7-aaf8-bf3a8d6b6818",
+      "payload": {
+        "attempt_id": "e604e5b2-6c15-4b58-980f-b06bcdfcd7e6",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "status",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_succeeded",
+      "id": "40a18f79-eff6-4a99-8a72-57e8126628cb",
+      "payload": {
+        "attempt_id": "0d322570-7c3a-4b62-8b59-30a55d9a6cac",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_worktree_create",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "repository_operation_started",
+      "id": "2afb3ef2-7a8c-4226-853a-f6e6a889699b",
+      "payload": {
+        "attempt_id": "0d322570-7c3a-4b62-8b59-30a55d9a6cac",
+        "branch": "factory-zero/d7b098d3-3df6-4762-81d6-",
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "operation": "git_worktree_create",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_started",
+      "id": "7f3b21be-b746-4807-b7b5-e43a8a42ada2",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055"
+      }
+    },
+    {
+      "event_type": "improvement_cycle_queued",
+      "id": "09c3a997-0a42-41c8-91eb-96a06e9d5df2",
+      "payload": {
+        "cycle_id": "d7b098d3-3df6-4762-81d6-6f4623d30055",
+        "repository_id": "d2161538-59a8-4319-9553-de0807025a19",
+        "reviewer_agent_id": "b1f6a3ec-0ae5-4207-847f-fbe1d65dfba7"
+      }
+    }
+  ],
+  "format": "factory-zero-live-audit/v1",
+  "source": "tests/e2e/test_factory_zero_live.py"
+}
