@@ -24,6 +24,8 @@ AI Factory OS is a durable, multi-tenant application for running autonomous agen
 
 ### Factory Zero safety model
 
+Factory Zero completed the final auditable self-improvement gate.
+
 Factory Zero completed explicit diagnose and plan phases during its second verified self-improvement.
 
 Factory Zero preserved a durable inspectable audit snapshot for every live cycle.
