@@ -24,6 +24,8 @@ AI Factory OS is a durable, multi-tenant application for running autonomous agen
 
 ### Factory Zero safety model
 
+Factory Zero completed explicit diagnose and plan phases during its second verified self-improvement.
+
 Factory Zero stores a first-class repository configuration and an encrypted GitHub token protected by `MASTER_KEY`. Each improvement cycle gets a durable, per-cycle Git worktree under `/app/data`; repository paths reject traversal and symlinks, and configured test/build/lint commands run as bounded argv-only subprocesses. Every repository, command, provider, review, PR, merge, and lifecycle transition is audited.
 
 Cycle leases use ownership tokens and heartbeats so long provider calls and verification commands cannot be stolen by another worker. Restart recovery requeues stale cycles. Push/PR/merge steps reconcile existing commits and pull requests before retrying, and successful GitHub checks (when configured) are required before merge. The live acceptance test is intentionally one-shot: once its marker is merged, reruns skip rather than create duplicate documentation commits.
