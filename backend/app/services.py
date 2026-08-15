@@ -121,6 +121,28 @@ def _audit_argv(argv: list[str]) -> list[str]:
     return safe
 
 
+_REPOSITORY_OPERATIONS = {
+    "checkout", "worktree", "read", "search", "write", "status", "diff", "commit",
+    "verify", "test", "build", "lint", "push", "create_pr", "merge",
+}
+
+
+def _normalize_repository_tool_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(arguments)
+    raw_operation = normalized.get("operation")
+    if isinstance(raw_operation, str):
+        match = re.match(r"\\s*(checkout|worktree|read|search|write|status|diff|commit|verify|test|build|lint|push|create_pr|merge)\\b", raw_operation)
+        if match:
+            normalized["operation"] = match.group(1)
+            for field in ("path", "query", "content"):
+                if normalized.get(field):
+                    continue
+                field_match = re.search(rf'name=[\"\']{field}[\"\'][^>]*>([^<]*)', raw_operation)
+                if field_match:
+                    normalized[field] = field_match.group(1)
+    return normalized
+
+
 def _audit_operation_input(arguments: dict[str, Any]) -> dict[str, Any]:
     allowed = {
         "operation", "repository_id", "cycle_id", "improvement_cycle_id", "path", "query",
@@ -1344,7 +1366,12 @@ class Runtime:
             for call in response.tool_calls:
                 if call.name != "repository":
                     raise ServiceError("Factory Zero model returned an unsupported tool")
-                arguments = {**call.arguments, "repository_id": cycle.repository_id, "worktree_path": cycle.worktree_path, "improvement_cycle_id": cycle.id}
+                arguments = _normalize_repository_tool_arguments({
+                    **call.arguments,
+                    "repository_id": cycle.repository_id,
+                    "worktree_path": cycle.worktree_path,
+                    "improvement_cycle_id": cycle.id,
+                })
                 if not write and arguments.get("operation") == "write":
                     raise PermissionError("repository writes are only allowed during the implementation phase")
                 self._assert_cycle_lease(db, cycle.id, lease_token, lease_lost)
