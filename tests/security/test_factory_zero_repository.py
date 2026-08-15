@@ -120,7 +120,9 @@ def test_generic_merge_tool_requires_successful_github_checks(database, monkeypa
         repository_id=repository.id,
         objective="merge",
         phase="merge",
+        branch_name="factory-zero/merge-cycle",
         head_sha="h" * 40,
+        pr_number=1,
         verification={"passed": True},
         review={"approved": True},
     )
@@ -136,15 +138,31 @@ def test_generic_merge_tool_requires_successful_github_checks(database, monkeypa
     async def unexpected_merge(*_args, **_kwargs):
         raise AssertionError("merge must not run when checks fail")
 
+    async def matching_pull_request(*_args, **_kwargs):
+        return {
+            "number": 1,
+            "head": {"ref": "factory-zero/merge-cycle", "sha": "h" * 40},
+            "base": {"ref": "master"},
+        }
+
+    monkeypatch.setattr("app.services.pull_request", matching_pull_request)
     monkeypatch.setattr("app.services.check_runs", failed_checks)
     monkeypatch.setattr("app.services.merge_pull_request", unexpected_merge)
+    with pytest.raises(PermissionError, match="number does not match"):
+        asyncio.run(execute_repository_tool(
+            db,
+            factory,
+            None,
+            None,
+            {"operation": "merge", "repository_id": repository.id, "worktree_path": str(worktree), "improvement_cycle_id": cycle.id, "number": 2, "branch": cycle.branch_name, "head_sha": cycle.head_sha},
+        ))
     with pytest.raises(PermissionError, match="successful GitHub checks"):
         asyncio.run(execute_repository_tool(
             db,
             factory,
             None,
             None,
-            {"operation": "merge", "repository_id": repository.id, "worktree_path": str(worktree), "improvement_cycle_id": cycle.id, "number": 1, "head_sha": cycle.head_sha},
+            {"operation": "merge", "repository_id": repository.id, "worktree_path": str(worktree), "improvement_cycle_id": cycle.id, "number": 1, "branch": cycle.branch_name, "head_sha": cycle.head_sha},
         ))
     event_types = {event.event_type for event in db.scalars(select(Event).where(Event.factory_id == factory.id))}
     assert {"repository_operation_started", "repository_operation_failed", "github_operation_started", "github_operation_succeeded"} <= event_types

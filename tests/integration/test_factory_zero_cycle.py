@@ -95,14 +95,26 @@ def test_factory_zero_cycle_is_durable_and_requires_independent_review(database,
     monkeypatch.setattr("app.services.git_diff", lambda *_args, **_kwargs: {"diff": "-before\n+after"})
     monkeypatch.setattr("app.services.git_commit", lambda *_args, **_kwargs: "c" * 40)
     monkeypatch.setattr("app.services.push_branch", lambda *_args, **_kwargs: None)
-    async def fake_create_pull_request(*_args, **_kwargs):
-        return {"number": 7, "html_url": "https://github.com/TitoTFP/ai-factory-os/pull/7", "head": {"sha": "c" * 40}}
+    async def fake_create_pull_request(_repository, _token, branch, _title, _body):
+        return {
+            "number": 7,
+            "html_url": "https://github.com/TitoTFP/ai-factory-os/pull/7",
+            "head": {"sha": "c" * 40, "ref": branch},
+            "base": {"ref": "master"},
+        }
 
     async def fake_merge_pull_request(*_args, **_kwargs):
         return {"merged": True, "sha": "m" * 40}
 
     async def fake_pull_request(*_args, **_kwargs):
-        return {"merged": True, "state": "closed", "merge_commit_sha": "m" * 40}
+        return {
+            "number": 7,
+            "merged": True,
+            "state": "closed",
+            "merge_commit_sha": "m" * 40,
+            "head": {"sha": "c" * 40, "ref": f"factory-zero/{cycle.id[:8]}"},
+            "base": {"ref": "master"},
+        }
 
     async def fake_check_runs(*_args, **_kwargs):
         return {"total_count": 1, "check_runs": [{"conclusion": "success"}]}
@@ -114,7 +126,7 @@ def test_factory_zero_cycle_is_durable_and_requires_independent_review(database,
     monkeypatch.setattr("app.services.cleanup_worktree", lambda *_args, **_kwargs: None)
 
     runtime = Runtime()
-    expected_phases = ["implement", "verify", "review", "merge", "observe", "completed"]
+    expected_phases = ["diagnose", "plan", "implement", "verify", "review", "merge", "observe", "completed"]
     for expected in expected_phases:
         db.refresh(cycle)
         cycle.status = "running"
@@ -124,11 +136,20 @@ def test_factory_zero_cycle_is_durable_and_requires_independent_review(database,
         assert cycle.phase == expected
 
     assert cycle.status == "completed"
+    assert {"discovery", "diagnosis", "plan", "implementation"} <= cycle.proposal.keys()
     assert cycle.review["approved"]
     assert cycle.observation["merged"]
     assert (worktree / "README.md").read_text(encoding="utf-8") == "after"
     event_types = {event.event_type for event in db.scalars(select(Event).where(Event.factory_id == factory.id))}
-    assert {"improvement_cycle_diagnosed", "improvement_cycle_verified", "improvement_cycle_reviewed", "improvement_cycle_merged", "improvement_cycle_completed"} <= event_types
+    assert {
+        "improvement_cycle_discovered",
+        "improvement_cycle_diagnosed",
+        "improvement_cycle_planned",
+        "improvement_cycle_verified",
+        "improvement_cycle_reviewed",
+        "improvement_cycle_merged",
+        "improvement_cycle_completed",
+    } <= event_types
     db.close()
 
 

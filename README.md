@@ -20,7 +20,7 @@ AI Factory OS is a durable, multi-tenant application for running autonomous agen
 - **Permission-derived tools** — workspace files, web fetch, scoped generic HTTP, delegation, review, and reorganization.
 - **Factory Floor UI** — onboarding, factory switching, detail drawers, lifecycle controls, live WebSocket activity, and estimated token/cost telemetry.
 - **Operational durability** — Alembic migrations, PostgreSQL deployment, SQLite test fallback, named workspace volume, cursor-based events, and idempotent message creation.
-- **Factory Zero** — a repository-first discover → diagnose → implement → verify → independent-review → PR → merge → observe loop for `TitoTFP/ai-factory-os`.
+- **Factory Zero** — a repository-first discover → diagnose → plan → implement → verify → independent-review → PR → merge → observe loop for `TitoTFP/ai-factory-os`.
 
 ### Factory Zero safety model
 

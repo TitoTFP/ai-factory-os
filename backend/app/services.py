@@ -177,6 +177,28 @@ def _audit_error(exc: BaseException) -> dict[str, str]:
     return {"error_type": type(exc).__name__, "error": _audit_text(exc, 1_000)}
 
 
+def _assert_cycle_pull_request(cycle: ImprovementCycle, repository: Repository, pull: Any) -> None:
+    if not isinstance(pull, dict):
+        raise RepositoryError("GitHub returned an invalid pull request")
+    if cycle.pr_number is not None:
+        try:
+            actual_number = int(pull.get("number", 0) or 0)
+        except (TypeError, ValueError) as exc:
+            raise RepositoryError("GitHub returned an invalid pull request number") from exc
+        if actual_number != cycle.pr_number:
+            raise PermissionError("pull request does not match the improvement cycle")
+    head = pull.get("head")
+    if not isinstance(head, dict):
+        raise PermissionError("pull request is missing its head binding")
+    if cycle.branch_name and head.get("ref") != cycle.branch_name:
+        raise PermissionError("pull request branch does not match the improvement cycle")
+    if cycle.head_sha and head.get("sha") != cycle.head_sha:
+        raise PermissionError("pull request head does not match the improvement cycle")
+    base = pull.get("base")
+    if isinstance(base, dict) and base.get("ref") != repository.default_branch:
+        raise PermissionError("pull request base does not match the repository")
+
+
 def _audit_start(
     db: Session,
     factory_id: str,
@@ -436,13 +458,30 @@ async def execute_repository_tool(
                     raise PermissionError("merge requires an active improvement cycle")
                 if not bool(cycle.verification.get("passed")) or not bool(cycle.review.get("approved")):
                     raise PermissionError("merge requires verified work and an independent approved review")
+                if cycle.pr_number is None or not cycle.branch_name or not cycle.head_sha:
+                    raise PermissionError("merge requires the cycle's persisted pull request, branch, and head SHA")
                 try:
                     pull_number = int(arguments.get("number", 0))
                 except (TypeError, ValueError) as exc:
                     raise RepositoryError("invalid pull request number") from exc
-                head_sha = str(arguments.get("head_sha") or cycle.head_sha or "")
-                if not head_sha:
-                    raise PermissionError("merge requires a committed head SHA")
+                if pull_number != cycle.pr_number:
+                    raise PermissionError("pull request number does not match the improvement cycle")
+                head_sha = str(arguments.get("head_sha") or "")
+                if head_sha != cycle.head_sha:
+                    raise PermissionError("pull request head does not match the improvement cycle")
+                requested_branch = str(arguments.get("branch") or cycle.branch_name)
+                if requested_branch != cycle.branch_name:
+                    raise PermissionError("pull request branch does not match the improvement cycle")
+                pull = await _audited_github_call(
+                    db,
+                    factory.id,
+                    repository.id,
+                    cycle_id,
+                    "pull_request_get",
+                    lambda: pull_request(repository, token or "", pull_number),
+                    details={"number": pull_number},
+                )
+                _assert_cycle_pull_request(cycle, repository, pull)
                 checks = await _audited_github_call(
                     db,
                     factory.id,
@@ -461,7 +500,7 @@ async def execute_repository_tool(
                     cycle_id,
                     "merge_pull_request",
                     lambda: merge_pull_request(repository, token or "", pull_number, head_sha),
-                    details={"number": pull_number, "head_sha": head_sha},
+                    details={"number": pull_number, "branch": cycle.branch_name, "head_sha": head_sha},
                 )
             else:
                 raise RepositoryError(f"unsupported repository operation: {operation}")
@@ -1410,14 +1449,71 @@ class Runtime:
                 factory,
                 cycle,
                 author,
-                "Return JSON with problem, rationale, files_to_inspect, and proposed_change. Inspect the repository first; do not edit files yet. Objective:\n" + cycle.objective,
+                "Discover the repository context for this objective. Use only read/search/status/diff operations; do not edit files. Return JSON with repository_summary, files_to_inspect, observations, and relevant_commands. Do not diagnose or propose an implementation yet. Objective:\n" + cycle.objective,
                 lease_token=lease_token,
                 lease_lost=lease_lost,
             )
-            cycle.proposal = self._cycle_json(text)
+            cycle.proposal = {"discovery": self._cycle_json(text)}
+            cycle.phase = "diagnose"
+            cycle.error = None
+            record_event(
+                db,
+                factory.id,
+                "improvement_cycle_discovered",
+                {"cycle_id": cycle.id, "branch": cycle.branch_name, "base_sha": cycle.base_sha},
+            )
+        elif cycle.phase == "diagnose":
+            author = db.get(Agent, cycle.author_agent_id)
+            if not author or author.factory_id != factory.id:
+                raise ServiceError("Factory Zero author agent is unavailable")
+            text = await self._cycle_model_call(
+                db,
+                factory,
+                cycle,
+                author,
+                "Diagnose the objective using the isolated repository. Use only read/search/status/diff operations; do not edit files or create an implementation plan. Return JSON with problem, rationale, risks, and evidence. Discovery context:\n"
+                + json.dumps(cycle.proposal.get("discovery", {}), ensure_ascii=False)[:20_000]
+                + "\nObjective:\n"
+                + cycle.objective,
+                lease_token=lease_token,
+                lease_lost=lease_lost,
+            )
+            cycle.proposal = {**cycle.proposal, "diagnosis": self._cycle_json(text)}
+            cycle.phase = "plan"
+            cycle.error = None
+            record_event(
+                db,
+                factory.id,
+                "improvement_cycle_diagnosed",
+                {"cycle_id": cycle.id, "branch": cycle.branch_name, "base_sha": cycle.base_sha},
+            )
+        elif cycle.phase == "plan":
+            author = db.get(Agent, cycle.author_agent_id)
+            if not author or author.factory_id != factory.id:
+                raise ServiceError("Factory Zero author agent is unavailable")
+            text = await self._cycle_model_call(
+                db,
+                factory,
+                cycle,
+                author,
+                "Create a bounded implementation plan for the diagnosed objective. Use only read/search/status/diff operations; do not edit files. Return JSON with proposed_change, files, steps, verification_commands, and commit_message. Diagnosis context:\n"
+                + json.dumps(cycle.proposal.get("diagnosis", {}), ensure_ascii=False)[:20_000]
+                + "\nDiscovery context:\n"
+                + json.dumps(cycle.proposal.get("discovery", {}), ensure_ascii=False)[:20_000]
+                + "\nObjective:\n"
+                + cycle.objective,
+                lease_token=lease_token,
+                lease_lost=lease_lost,
+            )
+            cycle.proposal = {**cycle.proposal, "plan": self._cycle_json(text)}
             cycle.phase = "implement"
             cycle.error = None
-            record_event(db, factory.id, "improvement_cycle_diagnosed", {"cycle_id": cycle.id, "branch": cycle.branch_name, "base_sha": cycle.base_sha})
+            record_event(
+                db,
+                factory.id,
+                "improvement_cycle_planned",
+                {"cycle_id": cycle.id, "branch": cycle.branch_name},
+            )
         elif cycle.phase == "implement":
             author = db.get(Agent, cycle.author_agent_id)
             if not author or author.factory_id != factory.id:
@@ -1429,7 +1525,7 @@ class Runtime:
                 cycle,
                 author,
                 "Implement the objective in the isolated worktree. Use repository write operations, inspect the diff, and return JSON with summary, files_changed, and commit_message. Do not commit or push yet.\nObjective:\n"
-                + cycle.objective + "\nPrior proposal:\n" + json.dumps(cycle.proposal, ensure_ascii=False)[:30_000] + "\nPrevious verification/review feedback:\n" + feedback,
+                + cycle.objective + "\nDiscovery, diagnosis, and plan:\n" + json.dumps(cycle.proposal, ensure_ascii=False)[:40_000] + "\nPrevious verification/review feedback:\n" + feedback,
                 write=True,
                 lease_token=lease_token,
                 lease_lost=lease_lost,
@@ -1639,13 +1735,18 @@ class Runtime:
                     details={"branch": cycle.branch_name},
                 )
             try:
-                cycle.pr_number = int(pr.get("number", 0) or 0)
+                pull_number = int(pr.get("number", 0) or 0)
             except (TypeError, ValueError) as exc:
                 raise RepositoryError("GitHub returned an invalid pull request number") from exc
+            if cycle.pr_number is not None and pull_number != cycle.pr_number:
+                raise PermissionError("pull request number does not match the improvement cycle")
+            _assert_cycle_pull_request(cycle, repository, pr)
+            cycle.pr_number = pull_number
             cycle.pr_url = str(pr.get("html_url", ""))
             cycle.head_sha = str(pr.get("head", {}).get("sha", "") or cycle.head_sha or "")
             if not cycle.pr_number or not cycle.head_sha:
                 raise RepositoryError("GitHub did not return a pull request number and head SHA")
+            _assert_cycle_pull_request(cycle, repository, pr)
             head_sha = str(cycle.head_sha)
             try:
                 pull_number = int(cycle.pr_number)

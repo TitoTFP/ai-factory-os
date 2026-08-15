@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -9,7 +10,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-LIVE_MARKER = "Factory Zero recorded per-operation repository and GitHub audit evidence."
+LIVE_MARKER = "Factory Zero completed explicit diagnose and plan phases during its second verified self-improvement."
 
 
 @pytest.mark.factory_zero_live
@@ -60,7 +61,7 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
         headers=auth,
         json={
             "repository_id": repository.json()["id"],
-            "objective": "Add the exact sentence `Factory Zero recorded per-operation repository and GitHub audit evidence.` to README.md under the opening description. Do not change the meaning of any other documentation, and keep all existing tests passing.",
+            "objective": "Add the exact sentence `Factory Zero completed explicit diagnose and plan phases during its second verified self-improvement.` to README.md under the Factory Zero safety model. Do not change the meaning of any other documentation, and keep all existing tests passing.",
         },
     )
     assert cycle.status_code == 200, cycle.text
@@ -96,7 +97,9 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
     events = snapshot.json()["events"]
     event_types = {event["event_type"] for event in events}
     expected_events = {
+        "improvement_cycle_discovered",
         "improvement_cycle_diagnosed",
+        "improvement_cycle_planned",
         "improvement_cycle_verified",
         "improvement_cycle_reviewed",
         "improvement_cycle_merged",
@@ -115,3 +118,26 @@ def test_factory_zero_completes_one_real_self_change(client, auth):
     assert merged_event["payload"]["reviewer_agent_id"] == final["reviewer_agent_id"]
     completed_event = next(event for event in events if event["event_type"] == "improvement_cycle_completed" and event["payload"].get("cycle_id") == cycle_id)
     assert completed_event["payload"]["merge_commit_sha"] == final["observation"]["merge_commit_sha"]
+
+    audit_path = os.getenv("FACTORY_ZERO_LIVE_AUDIT_PATH")
+    if audit_path:
+        Path(audit_path).write_text(
+            json.dumps(
+                {
+                    "cycle": final,
+                    "events": [
+                        {
+                            "id": event.get("id"),
+                            "event_type": event["event_type"],
+                            "payload": event["payload"],
+                        }
+                        for event in events
+                        if event["payload"].get("cycle_id") == cycle_id
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
